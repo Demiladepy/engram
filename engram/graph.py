@@ -58,16 +58,70 @@ class Hydra:
         """Raise if the server is unreachable."""
         self._driver.verify_connectivity()
 
-    def run(self, cypher: str, **params: Any) -> list[dict[str, Any]]:
-        """Execute one Cypher statement, return rows as dicts."""
-        with self._driver.session(database=self.database) as session:
+    def run(
+        self, cypher: str, database: str | None = None, **params: Any
+    ) -> list[dict[str, Any]]:
+        """Execute one Cypher statement, return rows as dicts.
+
+        ``database`` overrides the default (used for per-question scoped DBs).
+        """
+        with self._driver.session(database=database or self.database) as session:
             result = session.run(cypher, **params)
             return [record.data() for record in result]
 
     @contextmanager
-    def session(self) -> Iterator[Any]:
-        with self._driver.session(database=self.database) as session:
+    def session(self, database: str | None = None) -> Iterator[Any]:
+        with self._driver.session(database=database or self.database) as session:
             yield session
+
+    # --- batched writes (HydraDB UNWIND forms; see cypher-compat.md) ---
+
+    def merge_nodes(
+        self,
+        label: str,
+        rows: list[dict[str, Any]],
+        props: list[str],
+        database: str | None = None,
+    ) -> None:
+        """Upsert nodes: MERGE by integer id, then SET label + properties.
+
+        Each row is a map carrying ``id`` plus every name in ``props``. Property
+        values must be int/float/bool/string — never None.
+        """
+        if not rows:
+            return
+        sets = ", ".join(f"n.{p} = row.{p}" for p in props)
+        cypher = f"UNWIND $rows AS row MERGE (n {{id: row.id}}) SET n:{label}"
+        if sets:
+            cypher += f", {sets}"
+        self.run(cypher, database=database, rows=rows)
+
+    def merge_edges(
+        self,
+        rel: str,
+        rows: list[dict[str, Any]],
+        src_label: str,
+        dst_label: str,
+        props: list[str] | None = None,
+        database: str | None = None,
+    ) -> None:
+        """Upsert relationships: MATCH labelled endpoints by id, MERGE the edge.
+
+        Each row carries ``eid`` (edge id), ``src``, ``dst`` plus any ``props``.
+        HydraDB requires exactly one label on each matched endpoint.
+        """
+        if not rows:
+            return
+        props = props or []
+        sets = ", ".join(f"r.{p} = row.{p}" for p in props)
+        cypher = (
+            "UNWIND $rows AS row "
+            f"MATCH (s:{src_label} {{id: row.src}}), (d:{dst_label} {{id: row.dst}}) "
+            f"MERGE (s)-[r:{rel} {{id: row.eid}}]->(d)"
+        )
+        if sets:
+            cypher += f" SET {sets}"
+        self.run(cypher, database=database, rows=rows)
 
 
 if __name__ == "__main__":
