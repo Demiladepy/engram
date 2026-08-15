@@ -8,10 +8,10 @@ through here.
 Connection settings come from the environment so the same code works against a
 local plaintext node and a TLS one:
 
-    HYDRA_BOLT_URI   default neo4j://127.0.0.1:7687
+    HYDRA_BOLT_URI   default bolt://127.0.0.1:7687   (direct, single node)
     HYDRA_USER       default neo4j
-    HYDRA_PASSWORD   default "" (plaintext local node)
-    HYDRA_DATABASE   default neo4j
+    HYDRA_PASSWORD   the node's auth token (required even in plaintext mode)
+    HYDRA_DATABASE   default "default"
 """
 
 from __future__ import annotations
@@ -37,10 +37,10 @@ class Hydra:
         password: str | None = None,
         database: str | None = None,
     ) -> None:
-        self.uri = uri or _env("HYDRA_BOLT_URI", "neo4j://127.0.0.1:7687")
+        self.uri = uri or _env("HYDRA_BOLT_URI", "bolt://127.0.0.1:7687")
         self.user = user or _env("HYDRA_USER", "neo4j")
         self.password = password if password is not None else _env("HYDRA_PASSWORD", "")
-        self.database = database or _env("HYDRA_DATABASE", "neo4j")
+        self.database = database or _env("HYDRA_DATABASE", "default")
         self._driver: Driver = GraphDatabase.driver(
             self.uri, auth=(self.user, self.password)
         )
@@ -72,18 +72,27 @@ class Hydra:
 
 if __name__ == "__main__":
     # Phase-1 smoke: CREATE then MATCH a trivial graph and print it back.
+    #
+    # HydraDB rules exercised here (see cypher-compat.md): node ids are
+    # non-negative integers, CREATE only builds relationship paths, and each
+    # request carries exactly one statement — so cleanup is two MATCH ... DELETE
+    # calls, not a chained multi-statement.
+    A, B = 90001, 90002
     with Hydra() as h:
         h.verify()
-        h.run("MATCH (n:EngramSmoke) DETACH DELETE n")
+        h.run("MATCH (a {id:$id}) DETACH DELETE a", id=A)
+        h.run("MATCH (b {id:$id}) DETACH DELETE b", id=B)
         h.run(
-            "CREATE (a:EngramSmoke {name:$a})-[:LINKS]->(b:EngramSmoke {name:$b})",
-            a="hello",
-            b="hydradb",
+            "CREATE (a:EngramSmoke {id:$a, name:$an})"
+            "-[:LINKS]->(b:EngramSmoke {id:$b, name:$bn})",
+            a=A, an="hello", b=B, bn="hydradb",
         )
         rows = h.run(
-            "MATCH (a:EngramSmoke)-[:LINKS]->(b:EngramSmoke) "
-            "RETURN a.name AS src, b.name AS dst"
+            "MATCH (a:EngramSmoke {id:$a})-[:LINKS]->(b:EngramSmoke {id:$b}) "
+            "RETURN a.name AS src, b.name AS dst",
+            a=A, b=B,
         )
         print("round-trip rows:", rows)
-        h.run("MATCH (n:EngramSmoke) DETACH DELETE n")
+        h.run("MATCH (a {id:$id}) DETACH DELETE a", id=A)
+        h.run("MATCH (b {id:$id}) DETACH DELETE b", id=B)
         print("OK")

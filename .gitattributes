@@ -1,0 +1,3 @@
+# These run in WSL/Linux — force LF so CRLF from Windows never breaks them.
+*.sh   text eol=lf
+*.py   text eol=lf
