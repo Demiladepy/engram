@@ -18,10 +18,16 @@ RESULTS = Path(__file__).resolve().parent.parent / "results"
 
 _LABELS = {
     "engram": "Engram (graph)",
+    "vector": "Vector-RAG",
     "full_context": "Full-context",
     "mem0": "mem0-OSS",
 }
-_COLORS = {"engram": "#2f7d4f", "full_context": "#b0562f", "mem0": "#5a5a8a"}
+_COLORS = {
+    "engram": "#2f7d4f",
+    "vector": "#5a5a8a",
+    "full_context": "#b0562f",
+    "mem0": "#8a5a5a",
+}
 
 
 def main() -> None:

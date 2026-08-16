@@ -82,11 +82,18 @@ def run_full_context(inst: dict) -> dict[str, Any]:
     return {"answer": "" if out["abstained"] else out["answer"], "abstained": out["abstained"], "extra": {}}
 
 
+def run_vector(inst: dict) -> dict[str, Any]:
+    from bench import vector_baseline
+
+    out = vector_baseline.vector_rag(inst)
+    return {"answer": out["answer"], "abstained": out["abstained"], "extra": {}}
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=5, help="instances per category")
     ap.add_argument("--categories", default=",".join(CATEGORIES))
-    ap.add_argument("--systems", default="engram,full_context")
+    ap.add_argument("--systems", default="engram,vector,full_context")
     args = ap.parse_args()
 
     load_dotenv(find_dotenv(usecwd=True))
@@ -111,6 +118,8 @@ def main() -> None:
                 t0 = time.time()
                 if system == "engram":
                     out = run_engram(hydra, inst)
+                elif system == "vector":
+                    out = run_vector(inst)
                 else:
                     out = run_full_context(inst)
                 grade = llm.judge(inst["question"], inst["answer"], out["answer"])
