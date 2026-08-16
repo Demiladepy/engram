@@ -93,7 +93,7 @@ def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--n", type=int, default=5, help="instances per category")
     ap.add_argument("--categories", default=",".join(CATEGORIES))
-    ap.add_argument("--systems", default="engram,vector,full_context")
+    ap.add_argument("--systems", default="engram,vector")
     args = ap.parse_args()
 
     load_dotenv(find_dotenv(usecwd=True))

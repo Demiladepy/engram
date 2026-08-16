@@ -1,7 +1,16 @@
-"""Claude calls: fact extraction (ingest) and evidence-bound answering.
+"""LLM calls behind one provider-agnostic layer (OpenAI-compatible).
 
-Both use forced tool-use so the model returns structured data instead of prose
-we'd have to parse. One provider, one place.
+Points at Groq by default (free tier, fast). Any OpenAI-compatible endpoint —
+Ollama at localhost:11434/v1, Together, OpenAI itself — works by setting
+ENGRAM_LLM_BASE_URL and ENGRAM_LLM_KEY_ENV. Models are chosen per role so the
+cheap/fast model does the high-volume work and a stronger one answers:
+
+    ENGRAM_EXTRACT_MODEL  default llama-3.1-8b-instant   (high volume, cached)
+    ENGRAM_ANSWER_MODEL   default llama-3.3-70b-versatile
+    ENGRAM_JUDGE_MODEL    default llama-3.1-8b-instant
+
+Structured outputs use function-calling; results are cached on disk keyed by
+model+prompt, so re-runs and iteration cost nothing.
 """
 
 from __future__ import annotations
@@ -13,100 +22,134 @@ import time
 from pathlib import Path
 from typing import Any
 
-import anthropic
+from openai import (
+    APIConnectionError,
+    APITimeoutError,
+    InternalServerError,
+    OpenAI,
+    RateLimitError,
+)
 
 _CACHE = Path(os.environ.get("ENGRAM_CACHE", str(Path.home() / "hydra" / "engram-cache")))
+_RETRYABLE = (RateLimitError, APIConnectionError, APITimeoutError, InternalServerError)
 
 
 def _cache_get(key: str) -> Any | None:
     fp = _CACHE / f"{key}.json"
-    if fp.exists():
-        return json.loads(fp.read_text())
-    return None
+    return json.loads(fp.read_text()) if fp.exists() else None
 
 
 def _cache_put(key: str, value: Any) -> None:
     _CACHE.mkdir(parents=True, exist_ok=True)
     (_CACHE / f"{key}.json").write_text(json.dumps(value))
 
-_client: anthropic.Anthropic | None = None
 
-_RETRYABLE = (
-    anthropic.APIConnectionError,
-    anthropic.APITimeoutError,
-    anthropic.RateLimitError,
-    anthropic.InternalServerError,
-)
+_client_obj: OpenAI | None = None
 
 
-def client() -> anthropic.Anthropic:
-    global _client
-    if _client is None:
-        _client = anthropic.Anthropic(max_retries=0)  # we retry explicitly
-    return _client
+def client() -> OpenAI:
+    global _client_obj
+    if _client_obj is None:
+        base = os.environ.get("ENGRAM_LLM_BASE_URL", "https://api.groq.com/openai/v1")
+        key_env = os.environ.get("ENGRAM_LLM_KEY_ENV", "GROQ_API_KEY")
+        key = os.environ.get(key_env) or os.environ.get("OPENAI_API_KEY") or "no-key"
+        _client_obj = OpenAI(base_url=base, api_key=key, max_retries=0)
+    return _client_obj
+
+
+def _extract_model() -> str:
+    # gpt-oss respects tool schemas (integer types); the llama tool models on
+    # Groq either mangle predicates (8b) or emit wrong types (70b). 120b has
+    # noticeably higher free-tier throughput than 20b, which matters for the
+    # high-volume extraction step even after batching.
+    return os.environ.get("ENGRAM_EXTRACT_MODEL", "openai/gpt-oss-120b")
+
+
+def _answer_model() -> str:
+    return os.environ.get("ENGRAM_ANSWER_MODEL", "openai/gpt-oss-120b")
+
+
+def _judge_model() -> str:
+    return os.environ.get("ENGRAM_JUDGE_MODEL", "openai/gpt-oss-20b")
 
 
 def _create(**kwargs: Any) -> Any:
-    """messages.create with backoff — WSL/network blips must not kill a long run."""
-    delay = 1.0
-    for attempt in range(6):
+    """chat.completions.create with backoff — rate limits and blips must not
+    kill a long run."""
+    delay = 2.0
+    for attempt in range(8):
         try:
-            return client().messages.create(**kwargs)
-        except _RETRYABLE as exc:
-            if attempt == 5:
+            return client().chat.completions.create(**kwargs)
+        except _RETRYABLE:
+            if attempt == 7:
                 raise
             time.sleep(delay)
-            delay = min(delay * 2, 20.0)
+            delay = min(delay * 1.8, 30.0)
     raise RuntimeError("unreachable")
 
 
-def _model() -> str:
-    return os.environ.get("ENGRAM_LLM_MODEL", "claude-sonnet-5")
+def _call_tool(
+    model: str,
+    system: str,
+    user: str,
+    fn_name: str,
+    parameters: dict[str, Any],
+    max_tokens: int,
+) -> dict[str, Any]:
+    """Force a single function call and return its parsed arguments.
+
+    Falls back to parsing JSON from message content for models/endpoints that
+    don't honour forced tool_choice.
+    """
+    resp = _create(
+        model=model,
+        max_tokens=max_tokens,
+        temperature=0,
+        messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+        tools=[{"type": "function", "function": {"name": fn_name, "parameters": parameters}}],
+        tool_choice={"type": "function", "function": {"name": fn_name}},
+    )
+    msg = resp.choices[0].message
+    if msg.tool_calls:
+        return json.loads(msg.tool_calls[0].function.arguments)
+    return json.loads(_first_json_object(msg.content or ""))
 
 
-def _tool_result(resp: Any, tool_name: str) -> dict[str, Any]:
-    for block in resp.content:
-        if getattr(block, "type", None) == "tool_use" and block.name == tool_name:
-            return block.input
-    raise ValueError(f"model did not call {tool_name}: {resp.stop_reason}")
+def _first_json_object(text: str) -> str:
+    start = text.find("{")
+    if start == -1:
+        return "{}"
+    depth = 0
+    for i in range(start, len(text)):
+        if text[i] == "{":
+            depth += 1
+        elif text[i] == "}":
+            depth -= 1
+            if depth == 0:
+                return text[start : i + 1]
+    return "{}"
 
 
 # --- extraction -----------------------------------------------------------
 
-_EXTRACT_TOOL = {
-    "name": "record_facts",
-    "description": "Record durable facts stated by the user in this session.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "facts": {
-                "type": "array",
-                "items": {
-                    "type": "object",
-                    "properties": {
-                        "entity": {
-                            "type": "string",
-                            "description": "Canonical lowercase subject. Use 'user' for the human.",
-                        },
-                        "predicate": {
-                            "type": "string",
-                            "description": "Normalized snake_case relation, e.g. personal_best_5k_time, lives_in, job_title. Reuse the SAME predicate string for the same kind of fact across sessions.",
-                        },
-                        "object": {
-                            "type": "string",
-                            "description": "The value, as a short string.",
-                        },
-                        "source_turn": {
-                            "type": "integer",
-                            "description": "Index of the turn that states this fact.",
-                        },
-                    },
-                    "required": ["entity", "predicate", "object", "source_turn"],
+_EXTRACT_PARAMS = {
+    "type": "object",
+    "properties": {
+        "facts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "entity": {"type": "string", "description": "Canonical lowercase subject. Use 'user' for the human."},
+                    "predicate": {"type": "string", "description": "Normalized snake_case relation, e.g. personal_best_5k_time, lives_in, job_title. Reuse the SAME predicate string for the same kind of fact across sessions."},
+                    "object": {"type": "string", "description": "The value, as a short string."},
+                    "source_turn": {"type": "integer", "description": "Index of the turn that states this fact."},
                 },
-            }
-        },
-        "required": ["facts"],
+                "required": ["entity", "predicate", "object", "source_turn"],
+            },
+        }
     },
+    "required": ["facts"],
 }
 
 _EXTRACT_SYS = (
@@ -115,60 +158,79 @@ _EXTRACT_SYS = (
     "events with concrete values). Ignore small talk, questions, hypotheticals, "
     "and the assistant's own text. Prefer specific values. Use canonical "
     "snake_case predicates and reuse them for the same kind of fact so later "
-    "updates line up. Only record what is actually stated."
+    "updates line up. Only record what is actually stated. Call record_facts."
 )
 
 
 def extract_facts(turns: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return facts stated in one session's turns.
-
-    ``turns`` is ``[{'index': i, 'role': r, 'content': c}, ...]``.
-    """
-    lines = [f"[{t['index']}] {t['role']}: {t['content']}" for t in turns]
-    payload = "\n".join(lines)
-    key = hashlib.blake2b(
-        f"extract\x00{_model()}\x00{_EXTRACT_SYS}\x00{payload}".encode(), digest_size=16
-    ).hexdigest()
+    payload = "\n".join(f"[{t['index']}] {t['role']}: {t['content']}" for t in turns)
+    model = _extract_model()
+    key = hashlib.blake2b(f"extract\x00{model}\x00{payload}".encode(), digest_size=16).hexdigest()
     cached = _cache_get(key)
     if cached is not None:
         return cached
-    resp = _create(
-        model=_model(),
-        max_tokens=2048,
-        system=_EXTRACT_SYS,
-        tools=[_EXTRACT_TOOL],
-        tool_choice={"type": "tool", "name": "record_facts"},
-        messages=[{"role": "user", "content": payload}],
-    )
-    facts = _tool_result(resp, "record_facts").get("facts", [])
+    try:
+        out = _call_tool(model, _EXTRACT_SYS, payload, "record_facts", _EXTRACT_PARAMS, 2048)
+        facts = out.get("facts", []) if isinstance(out, dict) else []
+    except Exception:
+        return []  # flaky call: don't cache, so it retries next run
+    _cache_put(key, facts)  # cache only real results
+    return facts
+
+
+_EXTRACT_BATCH_PARAMS = {
+    "type": "object",
+    "properties": {
+        "facts": {
+            "type": "array",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "entity": {"type": "string", "description": "Canonical lowercase subject. Use 'user' for the human."},
+                    "predicate": {"type": "string", "description": "Normalized snake_case relation; reuse the SAME predicate for the same kind of fact across sessions."},
+                    "object": {"type": "string", "description": "The value, as a short string."},
+                    "source": {"type": "string", "description": "Tag of the turn that states this fact, e.g. s3t12."},
+                },
+                "required": ["entity", "predicate", "object", "source"],
+            },
+        }
+    },
+    "required": ["facts"],
+}
+
+_EXTRACT_BATCH_SYS = _EXTRACT_SYS + (
+    " Turns are tagged like [s3t12] meaning session 3, turn 12. For every fact, "
+    "set source to the exact tag of the turn that states it."
+)
+
+
+def extract_facts_batch(payload: str) -> list[dict[str, Any]]:
+    """Extract facts from several tagged sessions in one call — far fewer calls
+    than one-per-session, which is what keeps us under free-tier rate limits."""
+    model = _extract_model()
+    key = hashlib.blake2b(f"extractbatch\x00{model}\x00{payload}".encode(), digest_size=16).hexdigest()
+    cached = _cache_get(key)
+    if cached is not None:
+        return cached
+    try:
+        out = _call_tool(model, _EXTRACT_BATCH_SYS, payload, "record_facts", _EXTRACT_BATCH_PARAMS, 4096)
+        facts = out.get("facts", []) if isinstance(out, dict) else []
+    except Exception:
+        return []  # flaky call: don't cache, retry next run
     _cache_put(key, facts)
     return facts
 
 
 # --- answering ------------------------------------------------------------
 
-_ANSWER_TOOL = {
-    "name": "answer",
-    "description": "Answer the question using ONLY the provided evidence facts.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "abstained": {
-                "type": "boolean",
-                "description": "True if the evidence does not support any answer.",
-            },
-            "answer": {
-                "type": "string",
-                "description": "The answer, or empty string if abstaining.",
-            },
-            "used_fact_ids": {
-                "type": "array",
-                "items": {"type": "integer"},
-                "description": "Ids of the evidence facts the answer relied on.",
-            },
-        },
-        "required": ["abstained", "answer", "used_fact_ids"],
+_ANSWER_PARAMS = {
+    "type": "object",
+    "properties": {
+        "abstained": {"type": "boolean", "description": "True if the evidence does not support any answer."},
+        "answer": {"type": "string", "description": "The answer, or empty string if abstaining."},
+        "used_fact_ids": {"type": "array", "items": {"type": "integer"}, "description": "Ids of the evidence facts the answer relied on."},
     },
+    "required": ["abstained", "answer", "used_fact_ids"],
 }
 
 _ANSWER_SYS = (
@@ -176,16 +238,11 @@ _ANSWER_SYS = (
     "Each fact has an id, a subject, a relation, a value, and when it was true. "
     "If the evidence does not contain the answer, you MUST abstain — set "
     "abstained=true and answer=''. Never guess or use outside knowledge. When "
-    "facts conflict over time, prefer the one marked current."
+    "facts conflict over time, prefer the one marked current. Call answer."
 )
 
 
 def answer(question: str, evidence: list[dict[str, Any]]) -> dict[str, Any]:
-    """Answer ``question`` from ``evidence`` facts, or abstain.
-
-    Each evidence item: ``{id, subject, predicate, object, status, valid_from,
-    source}``.
-    """
     if not evidence:
         return {"abstained": True, "answer": "", "used_fact_ids": []}
     facts_text = "\n".join(
@@ -193,70 +250,59 @@ def answer(question: str, evidence: list[dict[str, Any]]) -> dict[str, Any]:
         f"| status={f['status']} | when={f['valid_from']} | source={f.get('source_text', '')!r}"
         for f in evidence
     )
-    resp = _create(
-        model=_model(),
-        max_tokens=1024,
-        system=_ANSWER_SYS,
-        tools=[_ANSWER_TOOL],
-        tool_choice={"type": "tool", "name": "answer"},
-        messages=[
-            {
-                "role": "user",
-                "content": f"Question: {question}\n\nEvidence facts:\n{facts_text}",
-            }
-        ],
-    )
-    return _tool_result(resp, "answer")
+    user = f"Question: {question}\n\nEvidence facts:\n{facts_text}"
+    try:
+        out = _call_tool(_answer_model(), _ANSWER_SYS, user, "answer", _ANSWER_PARAMS, 1024)
+    except Exception:
+        return {"abstained": True, "answer": "", "used_fact_ids": []}
+    out.setdefault("abstained", False)
+    out.setdefault("answer", "")
+    out.setdefault("used_fact_ids", [])
+    return out
 
 
 # --- baseline: full-context ----------------------------------------------
 
 _FULLCTX_SYS = (
     "You are a long-term memory assistant. Answer the user's question using only "
-    "the conversation history provided below. If the history does not contain the "
+    "the conversation history provided. If the history does not contain the "
     "answer, reply that you don't have that information — do not guess. Keep the "
     "answer to one short sentence."
 )
 
 
 def answer_full_context(question: str, history_text: str) -> str:
-    """Baseline: answer from the entire raw history in-context (no graph).
-
-    This is the strongest vector-free contender — everything the model could
-    retrieve is already in front of it. Cached on the exact prompt.
-    """
+    """Baseline answerer over raw context (used by full-context and vector-RAG)."""
+    model = _answer_model()
     key = hashlib.blake2b(
-        f"fullctx\x00{_model()}\x00{question}\x00{history_text}".encode(), digest_size=16
+        f"fullctx\x00{model}\x00{question}\x00{history_text}".encode(), digest_size=16
     ).hexdigest()
     cached = _cache_get(key)
     if cached is not None:
         return cached
     resp = _create(
-        model=_model(),
+        model=model,
         max_tokens=256,
-        system=_FULLCTX_SYS,
+        temperature=0,
         messages=[
-            {"role": "user", "content": f"{history_text}\n\nQuestion: {question}"}
+            {"role": "system", "content": _FULLCTX_SYS},
+            {"role": "user", "content": f"{history_text}\n\nQuestion: {question}"},
         ],
     )
-    text = "".join(b.text for b in resp.content if getattr(b, "type", None) == "text").strip()
+    text = (resp.choices[0].message.content or "").strip()
     _cache_put(key, text)
     return text
 
 
 # --- grading --------------------------------------------------------------
 
-_JUDGE_TOOL = {
-    "name": "grade",
-    "description": "Grade whether the candidate answer is correct.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "correct": {"type": "boolean"},
-            "reason": {"type": "string", "description": "Brief justification."},
-        },
-        "required": ["correct", "reason"],
+_JUDGE_PARAMS = {
+    "type": "object",
+    "properties": {
+        "correct": {"type": "boolean"},
+        "reason": {"type": "string", "description": "Brief justification."},
     },
+    "required": ["correct", "reason"],
 }
 
 _JUDGE_SYS = (
@@ -266,39 +312,26 @@ _JUDGE_SYS = (
     "fine). IMPORTANT: when the gold answer indicates the information was never "
     "stated / is not available, correct=true ONLY if the candidate also declines "
     "or says it doesn't have that information; a candidate that states a concrete "
-    "answer in that case is incorrect (a hallucination)."
+    "answer in that case is incorrect. Call grade."
 )
 
 
-def _judge_model() -> str:
-    return os.environ.get("ENGRAM_JUDGE_MODEL", "claude-haiku-4-5-20251001")
-
-
 def judge(question: str, gold: str, candidate: str) -> dict[str, Any]:
-    """LLM correctness grade: {correct: bool, reason: str}. Cached."""
-    jm = _judge_model()
+    model = _judge_model()
     key = hashlib.blake2b(
-        f"judge\x00{jm}\x00{question}\x00{gold}\x00{candidate}".encode(), digest_size=16
+        f"judge\x00{model}\x00{question}\x00{gold}\x00{candidate}".encode(), digest_size=16
     ).hexdigest()
     cached = _cache_get(key)
     if cached is not None:
         return cached
-    resp = _create(
-        model=jm,
-        max_tokens=256,
-        system=_JUDGE_SYS,
-        tools=[_JUDGE_TOOL],
-        tool_choice={"type": "tool", "name": "grade"},
-        messages=[
-            {
-                "role": "user",
-                "content": (
-                    f"Question: {question}\nGold answer: {gold}\n"
-                    f"Candidate answer: {candidate or '(no answer / abstained)'}"
-                ),
-            }
-        ],
+    user = (
+        f"Question: {question}\nGold answer: {gold}\n"
+        f"Candidate answer: {candidate or '(no answer / abstained)'}"
     )
-    result = _tool_result(resp, "grade")
+    try:
+        out = _call_tool(model, _JUDGE_SYS, user, "grade", _JUDGE_PARAMS, 256)
+        result = {"correct": bool(out.get("correct", False)), "reason": str(out.get("reason", ""))}
+    except Exception as exc:
+        return {"correct": False, "reason": f"judge error: {exc}"}  # don't cache errors
     _cache_put(key, result)
     return result

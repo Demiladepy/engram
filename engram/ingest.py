@@ -33,6 +33,17 @@ def load_dataset(path: str = DATA_PATH) -> list[dict[str, Any]]:
         return json.load(fh)
 
 
+import re
+
+_NONWORD = re.compile(r"[^a-z0-9]+")
+
+
+def _norm_predicate(pred: str) -> str:
+    """Snake-case a predicate so the same relation groups across sessions even
+    when the model phrases it differently ('lives in' -> 'lives_in')."""
+    return _NONWORD.sub("_", str(pred).strip().lower()).strip("_")
+
+
 def _clip(text: str) -> str:
     text = text.strip()
     return text if len(text) <= _MAX_TEXT else text[: _MAX_TEXT - 1] + "…"
@@ -66,32 +77,25 @@ def ingest_instance(hydra: Hydra, inst: dict[str, Any]) -> dict[str, Any]:
         key=lambda i: to_epoch(inst["haystack_dates"][i]),
     )
 
-    # Fact extraction is the slow, independent-per-session step — run it
-    # concurrently (cache hits return instantly; misses overlap their latency).
-    indexed_by_i = {
-        i: [
-            {"index": j, "role": t["role"], "content": t["content"]}
-            for j, t in enumerate(inst["haystack_sessions"][i])
-        ]
-        for i in order
-    }
-    workers = int(os.environ.get("ENGRAM_EXTRACT_WORKERS", "8"))
-    with cf.ThreadPoolExecutor(max_workers=workers) as ex:
-        facts_by_i = dict(
-            zip(order, ex.map(lambda i: llm.extract_facts(indexed_by_i[i]), order))
-        )
-
+    # Build sessions + messages first, remembering each turn's global tag
+    # (s{i}t{j}) -> message id and each session's timestamp, so batched
+    # extraction can point a fact back to its exact source turn.
+    msg_by_tag: dict[str, int] = {}
+    ts_by_i: dict[int, int] = {}
+    session_blocks: dict[int, str] = {}
     for idx, i in enumerate(order):
         sid = inst["haystack_session_ids"][i]
         turns = inst["haystack_sessions"][i]
         sts = to_epoch(inst["haystack_dates"][i])
+        ts_by_i[i] = sts
         s_id = nid("session", sid)
         b.sessions.append({"id": s_id, "idx": idx, "ts": sts, "sid": sid})
 
-        msg_ids: list[int] = []
+        lines = [f"## session s{i}"]
         for j, t in enumerate(turns):
+            tag = f"s{i}t{j}"
             m_id = nid("msg", f"{sid}:{j}")
-            msg_ids.append(m_id)
+            msg_by_tag[tag] = m_id
             b.messages.append(
                 {
                     "id": m_id,
@@ -104,23 +108,50 @@ def ingest_instance(hydra: Hydra, inst: dict[str, Any]) -> dict[str, Any]:
                 }
             )
             b.contains.append(b.edge("CONTAINS", s_id, m_id))
+            lines.append(f"[{tag}] {t['role']}: {t['content']}")
+        session_blocks[i] = "\n".join(lines)
 
-        # Attach the pre-extracted facts, with provenance to their source turns.
-        for f in facts_by_i[i]:
-            entity = str(f["entity"]).strip().lower()
-            predicate = str(f["predicate"]).strip()
-            obj = str(f["object"]).strip()
-            src_turn = int(f.get("source_turn", 0))
-            if not (entity and predicate and obj):
+    # Batch sessions into a few extraction calls (char budget) to stay under
+    # free-tier rate limits, then extract batches concurrently.
+    budget = int(os.environ.get("ENGRAM_EXTRACT_BATCH_CHARS", "12000"))
+    batches: list[str] = []
+    cur: list[str] = []
+    cur_len = 0
+    for i in order:
+        blk = session_blocks[i]
+        if cur and cur_len + len(blk) > budget:
+            batches.append("\n\n".join(cur))
+            cur, cur_len = [], 0
+        cur.append(blk)
+        cur_len += len(blk)
+    if cur:
+        batches.append("\n\n".join(cur))
+
+    workers = int(os.environ.get("ENGRAM_EXTRACT_WORKERS", "6"))
+    with cf.ThreadPoolExecutor(max_workers=max(1, min(workers, len(batches)))) as ex:
+        results = list(ex.map(llm.extract_facts_batch, batches))
+
+    tag_re = re.compile(r"s(\d+)t(\d+)")
+    for facts in results:
+        for f in facts:
+            entity = str(f.get("entity", "")).strip().lower()
+            predicate = _norm_predicate(f.get("predicate", ""))
+            obj = str(f.get("object", "")).strip()
+            tag_m = tag_re.search(str(f.get("source", "")))
+            if not (entity and predicate and obj and tag_m):
                 continue
+            i = int(tag_m.group(1))
+            if i not in ts_by_i:  # hallucinated session index
+                continue
+            tag = f"s{tag_m.group(1)}t{tag_m.group(2)}"
             e_id = nid("entity", entity)
             b.entities.append({"id": e_id, "canonical": entity})
-            f_id = nid("fact", f"{sid}:{entity}:{predicate}:{obj}:{src_turn}")
+            f_id = nid("fact", f"{tag}:{entity}:{predicate}:{obj}")
             b.facts[f_id] = {
                 "id": f_id,
                 "predicate": predicate,
                 "object": obj,
-                "valid_from": sts,
+                "valid_from": ts_by_i[i],
                 "valid_to": VALID_TO_OPEN,
                 "status": "current",
                 "confidence": 1.0,
@@ -128,8 +159,9 @@ def ingest_instance(hydra: Hydra, inst: dict[str, Any]) -> dict[str, Any]:
                 "_entity": entity,
             }
             b.about.append(b.edge("ABOUT", f_id, e_id))
-            if 0 <= src_turn < len(msg_ids):
-                b.states.append(b.edge("STATES", msg_ids[src_turn], f_id))
+            mid = msg_by_tag.get(tag)
+            if mid is not None:
+                b.states.append(b.edge("STATES", mid, f_id))
 
     _link_supersessions(b)
     _flush(hydra, db, b)
