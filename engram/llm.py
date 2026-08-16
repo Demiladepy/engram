@@ -190,7 +190,7 @@ def answer(question: str, evidence: list[dict[str, Any]]) -> dict[str, Any]:
         return {"abstained": True, "answer": "", "used_fact_ids": []}
     facts_text = "\n".join(
         f"id={f['id']} | {f['subject']} {f['predicate']} = {f['object']} "
-        f"| status={f['status']} | when={f['valid_from']} | source={f.get('source', '')!r}"
+        f"| status={f['status']} | when={f['valid_from']} | source={f.get('source_text', '')!r}"
         for f in evidence
     )
     resp = _create(
@@ -207,3 +207,98 @@ def answer(question: str, evidence: list[dict[str, Any]]) -> dict[str, Any]:
         ],
     )
     return _tool_result(resp, "answer")
+
+
+# --- baseline: full-context ----------------------------------------------
+
+_FULLCTX_SYS = (
+    "You are a long-term memory assistant. Answer the user's question using only "
+    "the conversation history provided below. If the history does not contain the "
+    "answer, reply that you don't have that information — do not guess. Keep the "
+    "answer to one short sentence."
+)
+
+
+def answer_full_context(question: str, history_text: str) -> str:
+    """Baseline: answer from the entire raw history in-context (no graph).
+
+    This is the strongest vector-free contender — everything the model could
+    retrieve is already in front of it. Cached on the exact prompt.
+    """
+    key = hashlib.blake2b(
+        f"fullctx\x00{_model()}\x00{question}\x00{history_text}".encode(), digest_size=16
+    ).hexdigest()
+    cached = _cache_get(key)
+    if cached is not None:
+        return cached
+    resp = _create(
+        model=_model(),
+        max_tokens=256,
+        system=_FULLCTX_SYS,
+        messages=[
+            {"role": "user", "content": f"{history_text}\n\nQuestion: {question}"}
+        ],
+    )
+    text = "".join(b.text for b in resp.content if getattr(b, "type", None) == "text").strip()
+    _cache_put(key, text)
+    return text
+
+
+# --- grading --------------------------------------------------------------
+
+_JUDGE_TOOL = {
+    "name": "grade",
+    "description": "Grade whether the candidate answer is correct.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "correct": {"type": "boolean"},
+            "reason": {"type": "string", "description": "Brief justification."},
+        },
+        "required": ["correct", "reason"],
+    },
+}
+
+_JUDGE_SYS = (
+    "You grade a candidate answer against a gold answer for a question about a "
+    "user's own chat history. Mark correct=true if the candidate conveys the same "
+    "essential fact as the gold answer (paraphrase and extra harmless detail are "
+    "fine). IMPORTANT: when the gold answer indicates the information was never "
+    "stated / is not available, correct=true ONLY if the candidate also declines "
+    "or says it doesn't have that information; a candidate that states a concrete "
+    "answer in that case is incorrect (a hallucination)."
+)
+
+
+def _judge_model() -> str:
+    return os.environ.get("ENGRAM_JUDGE_MODEL", "claude-haiku-4-5-20251001")
+
+
+def judge(question: str, gold: str, candidate: str) -> dict[str, Any]:
+    """LLM correctness grade: {correct: bool, reason: str}. Cached."""
+    jm = _judge_model()
+    key = hashlib.blake2b(
+        f"judge\x00{jm}\x00{question}\x00{gold}\x00{candidate}".encode(), digest_size=16
+    ).hexdigest()
+    cached = _cache_get(key)
+    if cached is not None:
+        return cached
+    resp = _create(
+        model=jm,
+        max_tokens=256,
+        system=_JUDGE_SYS,
+        tools=[_JUDGE_TOOL],
+        tool_choice={"type": "tool", "name": "grade"},
+        messages=[
+            {
+                "role": "user",
+                "content": (
+                    f"Question: {question}\nGold answer: {gold}\n"
+                    f"Candidate answer: {candidate or '(no answer / abstained)'}"
+                ),
+            }
+        ],
+    )
+    result = _tool_result(resp, "grade")
+    _cache_put(key, result)
+    return result

@@ -13,6 +13,7 @@ knowledge-update and temporal questions, and what the receipt renders.
 
 from __future__ import annotations
 
+import concurrent.futures as cf
 import json
 import os
 from typing import Any
@@ -65,6 +66,21 @@ def ingest_instance(hydra: Hydra, inst: dict[str, Any]) -> dict[str, Any]:
         key=lambda i: to_epoch(inst["haystack_dates"][i]),
     )
 
+    # Fact extraction is the slow, independent-per-session step — run it
+    # concurrently (cache hits return instantly; misses overlap their latency).
+    indexed_by_i = {
+        i: [
+            {"index": j, "role": t["role"], "content": t["content"]}
+            for j, t in enumerate(inst["haystack_sessions"][i])
+        ]
+        for i in order
+    }
+    workers = int(os.environ.get("ENGRAM_EXTRACT_WORKERS", "8"))
+    with cf.ThreadPoolExecutor(max_workers=workers) as ex:
+        facts_by_i = dict(
+            zip(order, ex.map(lambda i: llm.extract_facts(indexed_by_i[i]), order))
+        )
+
     for idx, i in enumerate(order):
         sid = inst["haystack_session_ids"][i]
         turns = inst["haystack_sessions"][i]
@@ -89,9 +105,8 @@ def ingest_instance(hydra: Hydra, inst: dict[str, Any]) -> dict[str, Any]:
             )
             b.contains.append(b.edge("CONTAINS", s_id, m_id))
 
-        # Extract facts from this session and attach provenance to source turns.
-        indexed = [{"index": j, "role": t["role"], "content": t["content"]} for j, t in enumerate(turns)]
-        for f in llm.extract_facts(indexed):
+        # Attach the pre-extracted facts, with provenance to their source turns.
+        for f in facts_by_i[i]:
             entity = str(f["entity"]).strip().lower()
             predicate = str(f["predicate"]).strip()
             obj = str(f["object"]).strip()

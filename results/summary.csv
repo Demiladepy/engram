@@ -1,0 +1,9 @@
+category,system,n,correct,accuracy
+multi-session,engram,1,0,0.0
+multi-session,full_context,1,0,0.0
+knowledge-update,engram,1,1,1.0
+knowledge-update,full_context,1,1,1.0
+temporal-reasoning,engram,1,0,0.0
+temporal-reasoning,full_context,1,1,1.0
+abstention,engram,1,1,1.0
+abstention,full_context,1,1,1.0

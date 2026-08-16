@@ -24,3 +24,6 @@ Thumbs.db
 # Scratch
 scratch/
 *.log
+results/raw.jsonl
+results/*.png
+__pycache__/
