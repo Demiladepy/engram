@@ -1,3 +1,9 @@
-neo4j>=5.14
-anthropic>=0.40
+# Engram — Python client + benchmark + UI. HydraDB itself is a separate Rust
+# server (see docs/RUNBOOK.md); nothing here builds it.
+neo4j>=5.14            # Bolt driver -> HydraDB
+openai>=1.40           # any OpenAI-compatible LLM endpoint (Groq by default)
 python-dotenv>=1.0
+fastembed>=0.3         # local ONNX embeddings for the vector-RAG baseline
+numpy>=1.26
+matplotlib>=3.8        # results chart
+streamlit>=1.30        # receipt UI

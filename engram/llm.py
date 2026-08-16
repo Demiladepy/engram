@@ -200,7 +200,10 @@ _EXTRACT_BATCH_PARAMS = {
 
 _EXTRACT_BATCH_SYS = _EXTRACT_SYS + (
     " Turns are tagged like [s3t12] meaning session 3, turn 12. For every fact, "
-    "set source to the exact tag of the turn that states it."
+    "set source to the exact tag of the turn that states it. The input may hold "
+    "several sessions — read EVERY session and turn and extract facts from all of "
+    "them; do not skip any. Be thorough: capture specific values (times, dates, "
+    "names, numbers, places) the user states."
 )
 
 

@@ -21,6 +21,7 @@ from contextlib import contextmanager
 from typing import Any, Iterator
 
 from neo4j import GraphDatabase, Driver
+from neo4j.exceptions import ServiceUnavailable, SessionExpired
 
 
 def _env(name: str, default: str) -> str:
@@ -42,7 +43,14 @@ class Hydra:
         self.password = password if password is not None else _env("HYDRA_PASSWORD", "")
         self.database = database or _env("HYDRA_DATABASE", "default")
         self._driver: Driver = GraphDatabase.driver(
-            self.uri, auth=(self.user, self.password)
+            self.uri,
+            auth=(self.user, self.password),
+            keep_alive=True,
+            # Ping any connection idle longer than this before reuse, so a
+            # connection the node dropped during a long gap (e.g. while the
+            # vector baseline embeds) is replaced instead of read as defunct.
+            liveness_check_timeout=10,
+            max_connection_lifetime=300,
         )
 
     def close(self) -> None:
@@ -64,10 +72,20 @@ class Hydra:
         """Execute one Cypher statement, return rows as dicts.
 
         ``database`` overrides the default (used for per-question scoped DBs).
+        Retries once on a dropped connection: autocommit queries don't get the
+        managed-transaction retry, so we discard a defunct pooled connection and
+        try again on a fresh one.
         """
-        with self._driver.session(database=database or self.database) as session:
-            result = session.run(cypher, **params)
-            return [record.data() for record in result]
+        db = database or self.database
+        last: Exception | None = None
+        for _ in range(3):
+            try:
+                with self._driver.session(database=db) as session:
+                    result = session.run(cypher, **params)
+                    return [record.data() for record in result]
+            except (ServiceUnavailable, SessionExpired) as exc:
+                last = exc
+        raise last  # type: ignore[misc]
 
     @contextmanager
     def session(self, database: str | None = None) -> Iterator[Any]:

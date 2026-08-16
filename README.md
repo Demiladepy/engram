@@ -28,9 +28,20 @@ harness comes online._
 HydraDB **is** the memory. It is an object-store-native OpenCypher graph database
 (Rust; Bolt on `:7687`, HTTP on `:8443`). Engram runs it as a server and drives
 it from Python over the Neo4j Bolt driver — no Rust is forked. HydraDB does the
-graph work that matters: the native `algo.MSpaths` traversal that collects the
-evidence subgraph for every answer, plus temporal filtering over the fact model
-below.
+graph work that matters:
+
+- **Typed multi-hop traversal** over `STATES`/`ABOUT`/`SUPERSEDES` retrieves each
+  answer's facts *and* their source messages in one query
+  (`(:Message)-[:STATES]->(:Fact)-[:ABOUT]->(:Entity)`).
+- **Native path procedures** (`algo.SSpaths` by integer node id) return whole
+  provenance subgraphs for the receipt.
+- **Temporal filtering** over the fact model below resolves supersession to the
+  fact that is current (or true as-of a date).
+- Each question is loaded into its own **scoped database**, so haystacks never
+  contaminate each other.
+
+Every write respects HydraDB's OpenCypher subset (integer node ids, no null/list
+properties, `CREATE` builds relationship paths, batches via `UNWIND $rows`).
 
 Without HydraDB, Engram loses the entire multi-hop temporal recall and the
 provenance the demo is built on.
@@ -44,10 +55,11 @@ provenance the demo is built on.
 (:Entity)-[:SAME_AS]->(:Entity)    entity resolution / alias merge
 ```
 
-A `:Fact` carries `{predicate, object, valid_from, valid_to, status, confidence}`;
-`status ∈ {current, superseded, retracted}` and `valid_to = null` means "still
-true". Every `:Fact` keeps a `STATES` edge back to its source `:Message` — that
-edge is the receipt.
+A `:Fact` carries `{predicate, object, valid_from, valid_to, status, confidence}`
+with integer-epoch times; `status ∈ {current, superseded, retracted}`. HydraDB
+stores no nulls, so an open interval is a far-future `valid_to` sentinel rather
+than `null`. Every `:Fact` keeps a `STATES` edge back to its source `:Message` —
+that edge is the receipt.
 
 ## Setup
 
@@ -58,19 +70,36 @@ full HydraDB build. Quick start once a local node is running:
 ```bash
 python -m venv .venv && . .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
-cp .env.example .env                            # add ANTHROPIC_API_KEY
+cp .env.example .env                            # add GROQ_API_KEY
+export HYDRA_PASSWORD="$(cat ~/hydra/engram-node/auth-token)"
 python -m engram.graph                          # Bolt round-trip smoke
+```
+
+**LLM stack.** Engram talks to any OpenAI-compatible endpoint (Groq by default;
+point `ENGRAM_LLM_BASE_URL` at Ollama or another provider). Fact extraction and
+answering use function-calling for structured output; the vector-RAG baseline
+embeds locally with `fastembed`, so only the answer step hits the network. Models
+are chosen per role (`ENGRAM_EXTRACT_MODEL`, `ENGRAM_ANSWER_MODEL`,
+`ENGRAM_JUDGE_MODEL`) and all calls are cached to disk.
+
+Run the benchmark and demo:
+
+```bash
+python -m bench.run_longmemeval --n 5   # Engram vs vector-RAG, per-category CSV
+python -m bench.plot                     # results/engram_vs_baseline.png
+streamlit run ui/app.py                  # receipt viewer
 ```
 
 ## Layout
 
 | Path | What |
 |---|---|
-| `engram/graph.py`  | HydraDB Bolt client, Cypher builders, `MSpaths` call |
-| `engram/ingest.py` | parse LongMemEval → extract facts → resolve entities → link supersession |
+| `engram/graph.py`  | HydraDB Bolt client — batched `UNWIND` writes, typed traversal, `SSpaths` |
+| `engram/ingest.py` | parse LongMemEval → batched fact extraction → link supersession by time |
 | `engram/answer.py` | retrieve → temporal filter → answer from evidence → receipt / abstain |
-| `bench/`           | LongMemEval-S harness, baselines, comparison chart |
-| `ui/`              | minimal receipt viewer |
+| `engram/llm.py`    | provider-agnostic (OpenAI-compatible) extraction / answering / judge, cached |
+| `bench/`           | LongMemEval-S harness, vector-RAG + full-context baselines, chart |
+| `ui/app.py`        | Streamlit receipt viewer |
 | `results/`         | committed CSV + chart |
 
 ## License

@@ -113,7 +113,7 @@ def ingest_instance(hydra: Hydra, inst: dict[str, Any]) -> dict[str, Any]:
 
     # Batch sessions into a few extraction calls (char budget) to stay under
     # free-tier rate limits, then extract batches concurrently.
-    budget = int(os.environ.get("ENGRAM_EXTRACT_BATCH_CHARS", "12000"))
+    budget = int(os.environ.get("ENGRAM_EXTRACT_BATCH_CHARS", "3500"))
     batches: list[str] = []
     cur: list[str] = []
     cur_len = 0
