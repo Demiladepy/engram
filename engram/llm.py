@@ -86,13 +86,22 @@ def _judge_model() -> str:
 
 
 def _create(role: str, **kwargs: Any) -> Any:
-    """chat.completions.create with backoff — rate limits and blips must not
-    kill a long run."""
+    """chat.completions.create with backoff — transient blips must not kill a
+    long run, but a per-DAY token cap will not reset for hours, so fail fast on
+    it instead of burning 30s×8 retries per call."""
     delay = 2.0
     for attempt in range(8):
         try:
             return _client_for(role).chat.completions.create(**kwargs)
-        except _RETRYABLE:
+        except RateLimitError as exc:
+            msg = str(exc).lower()
+            if "per day" in msg or "tpd" in msg:
+                raise  # daily cap — retrying is pointless
+            if attempt == 7:
+                raise
+            time.sleep(delay)
+            delay = min(delay * 1.8, 30.0)
+        except (APIConnectionError, APITimeoutError, InternalServerError):
             if attempt == 7:
                 raise
             time.sleep(delay)
@@ -251,11 +260,18 @@ _ANSWER_PARAMS = {
 }
 
 _ANSWER_SYS = (
-    "You answer strictly from the supplied evidence facts and nothing else. "
-    "Each fact has an id, a subject, a relation, a value, and when it was true. "
-    "If the evidence does not contain the answer, you MUST abstain — set "
-    "abstained=true and answer=''. Never guess or use outside knowledge. When "
-    "facts conflict over time, prefer the one marked current. Call answer."
+    "You answer a question about a user using ONLY the supplied evidence facts. "
+    "Each fact has an id, a subject, a relation, a value, and 'when' (a timestamp "
+    "it became true). Rules:\n"
+    "- Match facts to the question by MEANING, not exact wording (e.g. "
+    "'personal_best_time' answers a question about a personal best time in a run).\n"
+    "- If several facts could answer — typically an older and a newer value of the "
+    "same thing — choose the one with the LATEST 'when'; that is the current value. "
+    "A fact marked status=current also wins over status=superseded.\n"
+    "- Only abstain (abstained=true, answer='') when NO fact is relevant to the "
+    "question. Do not abstain merely because wording differs or values conflict.\n"
+    "- Never use outside knowledge. List the fact ids you relied on in "
+    "used_fact_ids. Call answer."
 )
 
 
