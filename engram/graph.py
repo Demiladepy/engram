@@ -94,6 +94,15 @@ class Hydra:
 
     # --- batched writes (HydraDB UNWIND forms; see cypher-compat.md) ---
 
+    # Rows per UNWIND query. Each edge row does two MATCHes + a MERGE, so a big
+    # instance's STATES batch can blow HydraDB's ~30s query timeout in one go —
+    # chunk it so every query stays well under the limit.
+    _CHUNK = 120
+
+    def _run_chunked(self, cypher: str, rows: list[dict[str, Any]], database: str | None) -> None:
+        for i in range(0, len(rows), self._CHUNK):
+            self.run(cypher, database=database, rows=rows[i : i + self._CHUNK])
+
     def merge_nodes(
         self,
         label: str,
@@ -112,7 +121,7 @@ class Hydra:
         cypher = f"UNWIND $rows AS row MERGE (n {{id: row.id}}) SET n:{label}"
         if sets:
             cypher += f", {sets}"
-        self.run(cypher, database=database, rows=rows)
+        self._run_chunked(cypher, rows, database)
 
     def merge_edges(
         self,
@@ -139,7 +148,7 @@ class Hydra:
         )
         if sets:
             cypher += f" SET {sets}"
-        self.run(cypher, database=database, rows=rows)
+        self._run_chunked(cypher, rows, database)
 
 
 if __name__ == "__main__":
