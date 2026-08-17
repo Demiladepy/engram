@@ -20,8 +20,15 @@ On the LongMemEval-S subsets where this matters — **multi-session reasoning,
 knowledge-update, temporal reasoning, and abstention** — a graph memory layer
 should beat a vector baseline and full-context prompting, *and* show its work.
 
-_Benchmark numbers and the comparison chart land in [`results/`](results/) as the
-harness comes online._
+**Status.** The graph mechanism is verified end to end on real LongMemEval-S
+data: a knowledge-update question (`"personal best 5K time?"`) is answered by
+following a `SUPERSEDES` edge from the superseded value to the current one, with
+a receipt pointing at the exact source message; an unanswerable question
+(`"name of my hamster?"`) is correctly **abstained** despite 100+ facts about the
+user. The Engram-vs-vector-RAG benchmark is built and runnable
+([`bench/`](bench/)); the at-scale accuracy chart awaits an LLM budget past
+free-tier daily token caps. Full detail — worked examples, limitations, and how
+to run the benchmark — in [`docs/RESULTS.md`](docs/RESULTS.md).
 
 ## How HydraDB is used
 
@@ -51,12 +58,10 @@ provenance the demo is built on.
 ```
 (:Session)-[:CONTAINS]->(:Message)-[:STATES]->(:Fact)-[:ABOUT]->(:Entity)
 (:Fact)-[:SUPERSEDES]->(:Fact)     knowledge updates / temporal reasoning
-(:Fact)-[:CONTRADICTS]->(:Fact)    conflict surfacing
-(:Entity)-[:SAME_AS]->(:Entity)    entity resolution / alias merge
 ```
 
 A `:Fact` carries `{predicate, object, valid_from, valid_to, status, confidence}`
-with integer-epoch times; `status ∈ {current, superseded, retracted}`. HydraDB
+with integer-epoch times; `status ∈ {current, superseded}`. HydraDB
 stores no nulls, so an open interval is a far-future `valid_to` sentinel rather
 than `null`. Every `:Fact` keeps a `STATES` edge back to its source `:Message` —
 that edge is the receipt.
