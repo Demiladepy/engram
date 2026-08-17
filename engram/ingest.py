@@ -108,7 +108,10 @@ def ingest_instance(hydra: Hydra, inst: dict[str, Any]) -> dict[str, Any]:
                 }
             )
             b.contains.append(b.edge("CONTAINS", s_id, m_id))
-            lines.append(f"[{tag}] {t['role']}: {t['content']}")
+            # Only user turns feed extraction — the assistant's text states no
+            # user facts, and dropping it ~halves the tokens the LLM must read.
+            if t["role"] == "user":
+                lines.append(f"[{tag}] {t['content']}")
         session_blocks[i] = "\n".join(lines)
 
     # Batch sessions into a few extraction calls (char budget) to stay under

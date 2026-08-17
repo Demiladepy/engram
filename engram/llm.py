@@ -44,17 +44,29 @@ def _cache_put(key: str, value: Any) -> None:
     (_CACHE / f"{key}.json").write_text(json.dumps(value))
 
 
-_client_obj: OpenAI | None = None
+_clients: dict[tuple[str, str], OpenAI] = {}
 
 
-def client() -> OpenAI:
-    global _client_obj
-    if _client_obj is None:
-        base = os.environ.get("ENGRAM_LLM_BASE_URL", "https://api.groq.com/openai/v1")
-        key_env = os.environ.get("ENGRAM_LLM_KEY_ENV", "GROQ_API_KEY")
-        key = os.environ.get(key_env) or os.environ.get("OPENAI_API_KEY") or "no-key"
-        _client_obj = OpenAI(base_url=base, api_key=key, max_retries=0)
-    return _client_obj
+def _client_for(role: str) -> OpenAI:
+    """OpenAI-compatible client for a role, with per-role endpoint override.
+
+    Each role (extract/answer/judge) can point at a different provider via
+    ENGRAM_<ROLE>_BASE_URL / ENGRAM_<ROLE>_KEY_ENV, else the global
+    ENGRAM_LLM_* is used. This is what lets high-volume extraction run on a
+    local Ollama node while answering/judging stay on a hosted model.
+    """
+    r = role.upper()
+    base = os.environ.get(f"ENGRAM_{r}_BASE_URL") or os.environ.get(
+        "ENGRAM_LLM_BASE_URL", "https://api.groq.com/openai/v1"
+    )
+    key_env = os.environ.get(f"ENGRAM_{r}_KEY_ENV") or os.environ.get(
+        "ENGRAM_LLM_KEY_ENV", "GROQ_API_KEY"
+    )
+    key = os.environ.get(key_env) or os.environ.get("OPENAI_API_KEY") or "ollama"
+    ck = (base, key)
+    if ck not in _clients:
+        _clients[ck] = OpenAI(base_url=base, api_key=key, max_retries=0)
+    return _clients[ck]
 
 
 def _extract_model() -> str:
@@ -73,13 +85,13 @@ def _judge_model() -> str:
     return os.environ.get("ENGRAM_JUDGE_MODEL", "openai/gpt-oss-20b")
 
 
-def _create(**kwargs: Any) -> Any:
+def _create(role: str, **kwargs: Any) -> Any:
     """chat.completions.create with backoff — rate limits and blips must not
     kill a long run."""
     delay = 2.0
     for attempt in range(8):
         try:
-            return client().chat.completions.create(**kwargs)
+            return _client_for(role).chat.completions.create(**kwargs)
         except _RETRYABLE:
             if attempt == 7:
                 raise
@@ -89,6 +101,7 @@ def _create(**kwargs: Any) -> Any:
 
 
 def _call_tool(
+    role: str,
     model: str,
     system: str,
     user: str,
@@ -99,9 +112,10 @@ def _call_tool(
     """Force a single function call and return its parsed arguments.
 
     Falls back to parsing JSON from message content for models/endpoints that
-    don't honour forced tool_choice.
+    don't honour forced tool_choice (e.g. some local models).
     """
     resp = _create(
+        role,
         model=model,
         max_tokens=max_tokens,
         temperature=0,
@@ -170,7 +184,7 @@ def extract_facts(turns: list[dict[str, Any]]) -> list[dict[str, Any]]:
     if cached is not None:
         return cached
     try:
-        out = _call_tool(model, _EXTRACT_SYS, payload, "record_facts", _EXTRACT_PARAMS, 2048)
+        out = _call_tool("extract", model, _EXTRACT_SYS, payload, "record_facts", _EXTRACT_PARAMS, 2048)
         facts = out.get("facts", []) if isinstance(out, dict) else []
     except Exception:
         return []  # flaky call: don't cache, so it retries next run
@@ -216,7 +230,7 @@ def extract_facts_batch(payload: str) -> list[dict[str, Any]]:
     if cached is not None:
         return cached
     try:
-        out = _call_tool(model, _EXTRACT_BATCH_SYS, payload, "record_facts", _EXTRACT_BATCH_PARAMS, 4096)
+        out = _call_tool("extract", model, _EXTRACT_BATCH_SYS, payload, "record_facts", _EXTRACT_BATCH_PARAMS, 4096)
         facts = out.get("facts", []) if isinstance(out, dict) else []
     except Exception:
         return []  # flaky call: don't cache, retry next run
@@ -255,7 +269,7 @@ def answer(question: str, evidence: list[dict[str, Any]]) -> dict[str, Any]:
     )
     user = f"Question: {question}\n\nEvidence facts:\n{facts_text}"
     try:
-        out = _call_tool(_answer_model(), _ANSWER_SYS, user, "answer", _ANSWER_PARAMS, 1024)
+        out = _call_tool("answer", _answer_model(), _ANSWER_SYS, user, "answer", _ANSWER_PARAMS, 1024)
     except Exception:
         return {"abstained": True, "answer": "", "used_fact_ids": []}
     out.setdefault("abstained", False)
@@ -284,6 +298,7 @@ def answer_full_context(question: str, history_text: str) -> str:
     if cached is not None:
         return cached
     resp = _create(
+        "answer",
         model=model,
         max_tokens=256,
         temperature=0,
@@ -332,7 +347,7 @@ def judge(question: str, gold: str, candidate: str) -> dict[str, Any]:
         f"Candidate answer: {candidate or '(no answer / abstained)'}"
     )
     try:
-        out = _call_tool(model, _JUDGE_SYS, user, "grade", _JUDGE_PARAMS, 256)
+        out = _call_tool("judge", model, _JUDGE_SYS, user, "grade", _JUDGE_PARAMS, 256)
         result = {"correct": bool(out.get("correct", False)), "reason": str(out.get("reason", ""))}
     except Exception as exc:
         return {"correct": False, "reason": f"judge error: {exc}"}  # don't cache errors
