@@ -32,12 +32,20 @@ def _embedder():
     return _EMBED
 
 
+_MAX_CHUNKS = 600
+
+
 def _chunks(instance: dict[str, Any]) -> list[str]:
     out: list[str] = []
     for date, sess in zip(instance["haystack_dates"], instance["haystack_sessions"]):
         for t in sess:
-            out.append(f"[{date}] {t['role']}: {t['content']}")
-    return out
+            # User turns carry the facts; skipping assistant turns roughly halves
+            # the CPU embedding cost per instance without losing answer content.
+            if t["role"] == "user":
+                out.append(f"[{date}] {t['content']}")
+    # Cap the corpus so a very large haystack can't make embedding take minutes;
+    # keep the most recent, which is where current facts live.
+    return out[-_MAX_CHUNKS:]
 
 
 def vector_rag(instance: dict[str, Any], k: int = 12) -> dict[str, Any]:

@@ -10,7 +10,10 @@ PIDF="${ENGRAM_NODE_PID:-$HOME/hydra/engram-node.pid}"
 if [[ -f "$PIDF" ]] && kill -0 "$(cat "$PIDF")" 2>/dev/null; then
   echo "already running (pid $(cat "$PIDF"))"
 else
-  nohup bash "$HERE/hydra_up.sh" >"$LOG" 2>&1 &
+  # setsid puts the node in its own session so a SIGTERM to whatever launched
+  # this script (e.g. a benchmark process being killed) does not take the node
+  # down with it.
+  setsid bash "$HERE/hydra_up.sh" >"$LOG" 2>&1 < /dev/null &
   echo $! >"$PIDF"
   echo "started pid $(cat "$PIDF")"
 fi
