@@ -6,204 +6,153 @@
 <title>Engram — graph memory that shows its work</title>
 <style>
   :root{
-    --bg:#ffffff; --alt:#f5f8f6; --card:#ffffff; --ink:#1b2024; --muted:#5c6670;
-    --faint:#8b949e; --line:#e7ebe9; --line2:#dfe4e1;
-    --green:#0fa15a; --green-2:#0c8a4c; --green-dim:#e7f6ee;
-    --coral:#ef4d6a; --coral-dim:#fdedf0;
-    --shadow:0 1px 2px rgba(20,30,25,.05),0 8px 24px rgba(20,30,25,.06);
+    --bg:#fbfdfc; --alt:#f2f6f4; --card:#ffffff; --ink:#161b1e; --muted:#57616a;
+    --faint:#8b949e; --line:#e6ebe8; --line2:#dbe2de;
+    --green:#0fa15a; --green-2:#0b8a4c; --green-dim:#e6f6ee;
+    --coral:#ef4d6a; --coral-2:#d13350; --coral-dim:#fdedf0;
+    --sh1:0 1px 2px rgba(16,30,22,.06);
+    --sh2:0 6px 20px rgba(16,30,22,.08);
+    --sh3:0 24px 48px rgba(16,30,22,.14);
     --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
     --mono:"SF Mono","JetBrains Mono",ui-monospace,"Cascadia Code",monospace;
   }
   *{box-sizing:border-box;}
   html{scroll-behavior:smooth;}
-  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);
-    line-height:1.6;-webkit-font-smoothing:antialiased;}
-  a{color:var(--green-2);text-decoration:none;}
-  a:hover{text-decoration:underline;}
-  .wrap{max-width:940px;margin:0 auto;padding:0 24px;}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);line-height:1.6;-webkit-font-smoothing:antialiased;
+    background-image:radial-gradient(900px 400px at 82% -6%,rgba(15,161,90,.07),transparent 60%),radial-gradient(700px 360px at 8% 8%,rgba(239,77,106,.05),transparent 55%);}
+  a{color:var(--green-2);text-decoration:none;} a:hover{text-decoration:underline;}
+  .wrap{max-width:960px;margin:0 auto;padding:0 24px;}
   .mono{font-family:var(--mono);}
 
-  /* nav */
-  nav{position:sticky;top:0;z-index:10;background:rgba(255,255,255,.85);
-    backdrop-filter:saturate(1.4) blur(8px);border-bottom:1px solid var(--line);}
-  nav .wrap{display:flex;align-items:center;gap:1rem;height:60px;}
-  .brand{display:flex;align-items:center;gap:.55rem;font-weight:700;font-size:1.12rem;
-    letter-spacing:-.01em;}
-  .melon{width:22px;height:22px;border-radius:50%;
-    background:radial-gradient(circle at 50% 120%,var(--coral) 0 58%,#fff 58% 63%,var(--green) 63%);
-    box-shadow:inset 0 0 0 1px rgba(0,0,0,.04);}
-  nav .sp{flex:1;}
-  nav a{color:var(--muted);font-size:.92rem;font-weight:500;}
-  nav a:hover{color:var(--ink);text-decoration:none;}
-  .btn{display:inline-flex;align-items:center;gap:.4rem;background:var(--green);color:#fff;
-    font-weight:600;font-size:.92rem;padding:.5rem .9rem;border-radius:9px;
-    box-shadow:var(--shadow);transition:background .15s;}
-  .btn:hover{background:var(--green-2);text-decoration:none;}
-  .btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--line2);box-shadow:none;}
+  nav{position:sticky;top:0;z-index:20;background:rgba(251,253,252,.8);backdrop-filter:saturate(1.5) blur(10px);border-bottom:1px solid var(--line);}
+  nav .wrap{display:flex;align-items:center;gap:1rem;height:62px;}
+  .brand{display:flex;align-items:center;gap:.6rem;font-weight:750;font-size:1.14rem;letter-spacing:-.01em;}
+  .melon{width:24px;height:24px;border-radius:50%;background:radial-gradient(circle at 50% 122%,var(--coral) 0 57%,#fff 57% 63%,var(--green) 63%);box-shadow:inset 0 0 0 1px rgba(0,0,0,.05),0 2px 6px rgba(239,77,106,.25);}
+  nav .sp{flex:1;} nav a{color:var(--muted);font-size:.92rem;font-weight:500;} nav a:hover{color:var(--ink);text-decoration:none;}
+  .btn{display:inline-flex;align-items:center;gap:.45rem;background:var(--green);color:#fff;font-weight:600;font-size:.93rem;padding:.55rem .95rem;border-radius:10px;box-shadow:var(--sh2);transition:transform .18s,box-shadow .18s,background .18s;cursor:pointer;border:none;font-family:inherit;}
+  .btn:hover{background:var(--green-2);text-decoration:none;transform:translateY(-2px);box-shadow:var(--sh3);}
+  .btn.ghost{background:#fff;color:var(--ink);border:1px solid var(--line2);box-shadow:var(--sh1);}
+  .btn.ghost:hover{background:#fff;}
 
-  /* hero */
-  .hero{padding:76px 0 40px;text-align:center;}
-  .eyebrow{display:inline-block;color:var(--green-2);background:var(--green-dim);
-    font-size:.76rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;
-    padding:.32rem .7rem;border-radius:999px;margin-bottom:1.3rem;}
-  h1{font-size:clamp(2.1rem,5vw,3.2rem);line-height:1.08;letter-spacing:-.025em;
-    margin:0 0 1rem;text-wrap:balance;font-weight:760;}
+  .hero{padding:84px 0 46px;text-align:center;}
+  .eyebrow{display:inline-block;color:var(--green-2);background:var(--green-dim);font-size:.75rem;font-weight:600;letter-spacing:.06em;text-transform:uppercase;padding:.34rem .74rem;border-radius:999px;margin-bottom:1.4rem;box-shadow:var(--sh1);}
+  h1{font-size:clamp(2.2rem,5.4vw,3.4rem);line-height:1.06;letter-spacing:-.028em;margin:0 0 1rem;text-wrap:balance;font-weight:780;}
   h1 .g{color:var(--green);}
-  .sub{font-size:1.18rem;color:var(--muted);max-width:640px;margin:0 auto 1.9rem;
-    text-wrap:balance;}
-  .cta{display:flex;gap:.7rem;justify-content:center;flex-wrap:wrap;}
+  .sub{font-size:1.18rem;color:var(--muted);max-width:660px;margin:0 auto 2rem;text-wrap:balance;}
+  .cta{display:flex;gap:.75rem;justify-content:center;flex-wrap:wrap;}
 
-  section{padding:48px 0;border-top:1px solid var(--line);}
-  .kicker{color:var(--green-2);font-size:.78rem;font-weight:700;letter-spacing:.09em;
-    text-transform:uppercase;margin:0 0 .5rem;}
-  h2{font-size:1.7rem;letter-spacing:-.02em;margin:0 0 .7rem;font-weight:720;text-wrap:balance;}
-  .lead{color:var(--muted);font-size:1.05rem;max-width:660px;margin:0 0 1.6rem;}
+  section{padding:52px 0;border-top:1px solid var(--line);}
+  .kicker{color:var(--green-2);font-size:.78rem;font-weight:700;letter-spacing:.09em;text-transform:uppercase;margin:0 0 .55rem;}
+  h2{font-size:1.75rem;letter-spacing:-.02em;margin:0 0 .7rem;font-weight:740;text-wrap:balance;}
+  .lead{color:var(--muted);font-size:1.06rem;max-width:680px;margin:0 0 1.7rem;}
 
-  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:1.1rem;perspective:1000px;}
   @media(max-width:720px){.grid3{grid-template-columns:1fr;}}
-  .tile{background:var(--card);border:1px solid var(--line);border-radius:14px;
-    padding:1.2rem 1.25rem;box-shadow:var(--shadow);}
-  .tile h3{margin:.2rem 0 .4rem;font-size:1.05rem;}
-  .tile p{margin:0;color:var(--muted);font-size:.95rem;}
-  .tnum{width:30px;height:30px;border-radius:9px;background:var(--green-dim);color:var(--green-2);
-    display:grid;place-items:center;font-weight:700;font-size:.9rem;}
+  .tilt{transform-style:preserve-3d;transition:transform .18s ease,box-shadow .18s ease;will-change:transform;}
+  .tile{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:1.35rem 1.4rem;box-shadow:var(--sh2);}
+  .tile h3{margin:.55rem 0 .4rem;font-size:1.08rem;} .tile p{margin:0;color:var(--muted);font-size:.96rem;}
+  .tnum{width:34px;height:34px;border-radius:10px;background:linear-gradient(150deg,var(--green),#14b968);color:#fff;display:grid;place-items:center;font-weight:800;font-size:.95rem;box-shadow:0 6px 14px rgba(15,161,90,.35);transform:translateZ(28px);}
+  .tile h3,.tile p{transform:translateZ(14px);}
 
-  /* demo card */
-  .demo{background:var(--alt);border:1px solid var(--line);border-radius:18px;padding:1.5rem;
-    box-shadow:var(--shadow);}
-  .q{font-size:1.15rem;font-weight:600;margin:0 0 1rem;}
-  .q .lbl{color:var(--faint);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;
-    display:block;margin-bottom:.35rem;font-weight:700;}
-  .answer{display:flex;align-items:center;gap:.8rem;background:#fff;border:1px solid var(--line);
-    border-radius:13px;padding:1rem 1.2rem;margin-bottom:1rem;}
-  .pill{display:inline-flex;align-items:center;gap:.4rem;color:var(--green-2);background:var(--green-dim);
-    font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
-    padding:.28rem .6rem;border-radius:999px;white-space:nowrap;}
-  .pill .dot{width:6px;height:6px;border-radius:50%;background:var(--green);}
-  .aval{font-size:1.7rem;font-weight:750;letter-spacing:-.01em;font-variant-numeric:tabular-nums;}
-  .receipt{background:#fff;border:1px solid var(--line);border-radius:13px;padding:1.1rem 1.2rem;}
-  .rlabel{color:var(--faint);font-size:.68rem;letter-spacing:.13em;text-transform:uppercase;
-    font-weight:700;margin-bottom:.5rem;}
-  .fact{font-family:var(--mono);font-size:.95rem;margin-bottom:.7rem;}
-  .fact .p{color:var(--muted);}.fact .v{color:var(--green-2);font-weight:700;}
-  .quote{border-left:3px solid var(--green);background:var(--alt);border-radius:0 8px 8px 0;
-    padding:.65rem .85rem;color:#374049;font-size:.92rem;}
-  .super{display:flex;align-items:center;gap:.6rem;margin-top:.85rem;padding-top:.8rem;
-    border-top:1px solid var(--line);font-family:var(--mono);font-size:.92rem;flex-wrap:wrap;}
-  .old{color:var(--coral);text-decoration:line-through;}
-  .to{color:var(--faint);font-family:var(--sans);font-size:.78rem;}
-  .new{color:var(--green-2);font-weight:700;}
+  /* interactive demo */
+  .try{display:flex;gap:.6rem;flex-wrap:wrap;margin-bottom:1.15rem;}
+  .qbtn{cursor:pointer;background:#fff;border:1px solid var(--line2);border-radius:999px;padding:.55rem 1rem;font-size:.93rem;color:var(--ink);font-weight:550;transition:.16s;font-family:inherit;box-shadow:var(--sh1);}
+  .qbtn:hover{border-color:var(--green);color:var(--green-2);transform:translateY(-1px);}
+  .qbtn.on{background:var(--green);border-color:var(--green);color:#fff;box-shadow:0 8px 18px rgba(15,161,90,.3);}
+  .qbtn.abs.on{background:var(--coral);border-color:var(--coral);box-shadow:0 8px 18px rgba(239,77,106,.28);}
+  .qbtn.abs:hover{border-color:var(--coral);color:var(--coral-2);}
+  .demo{background:linear-gradient(180deg,#ffffff,#f7faf8);border:1px solid var(--line);border-radius:20px;padding:1.6rem;box-shadow:var(--sh3);}
+  .q{font-size:1.14rem;font-weight:600;margin:0 0 1.1rem;}
+  .q .lbl{color:var(--faint);font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;display:block;margin-bottom:.4rem;font-weight:700;}
+  .answer{display:flex;align-items:center;gap:.85rem;background:#fff;border:1px solid var(--line);border-radius:14px;padding:1.05rem 1.25rem;margin-bottom:1rem;flex-wrap:wrap;box-shadow:var(--sh1);}
+  .pill{display:inline-flex;align-items:center;gap:.42rem;font-size:.68rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;padding:.3rem .62rem;border-radius:999px;white-space:nowrap;}
+  .pill.ok{color:var(--green-2);background:var(--green-dim);} .pill.no{color:var(--coral-2);background:var(--coral-dim);}
+  .pill .dot{width:6px;height:6px;border-radius:50%;background:currentColor;}
+  .aval{font-size:1.85rem;font-weight:780;letter-spacing:-.01em;font-variant-numeric:tabular-nums;}
+  .aval.abst{font-size:1.06rem;font-weight:620;color:var(--coral-2);}
+  .receipt{background:#fff;border:1px solid var(--line);border-radius:14px;padding:1.15rem 1.25rem;box-shadow:var(--sh1);}
+  .rlabel{color:var(--faint);font-size:.68rem;letter-spacing:.13em;text-transform:uppercase;font-weight:700;margin-bottom:.55rem;}
+  .fact{font-family:var(--mono);font-size:.96rem;margin-bottom:.75rem;} .fact .p{color:var(--muted);} .fact .v{color:var(--green-2);font-weight:700;}
+  .quote{border-left:3px solid var(--green);background:var(--alt);border-radius:0 9px 9px 0;padding:.7rem .9rem;color:#333d43;font-size:.93rem;}
+  .super{display:flex;align-items:center;gap:.65rem;margin-top:.9rem;padding-top:.85rem;border-top:1px solid var(--line);font-family:var(--mono);font-size:.93rem;flex-wrap:wrap;}
+  .old{color:var(--coral);text-decoration:line-through;} .to{color:var(--faint);font-family:var(--sans);font-size:.78rem;} .new{color:var(--green-2);font-weight:700;}
+  .note{color:var(--muted);font-size:.92rem;margin-top:.75rem;}
 
-  /* ledger */
-  .ledger{border:1px solid var(--line);border-radius:14px;overflow:hidden;background:#fff;
-    box-shadow:var(--shadow);}
-  .lrow{display:grid;grid-template-columns:1fr auto;gap:1rem;align-items:center;
-    padding:.8rem 1.2rem;border-top:1px solid var(--line);font-family:var(--mono);font-size:.9rem;}
-  .lrow:first-child{border-top:none;}
+  .ledger{border:1px solid var(--line);border-radius:16px;overflow:hidden;background:#fff;box-shadow:var(--sh2);}
+  .lrow{display:grid;grid-template-columns:1fr auto;gap:1rem;align-items:center;padding:.85rem 1.25rem;border-top:1px solid var(--line);font-family:var(--mono);font-size:.9rem;transition:background .15s;}
+  .lrow:first-child{border-top:none;} .lrow:hover{background:var(--alt);}
   .lrow .k{color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .chain{display:flex;align-items:center;gap:.5rem;justify-self:end;}
 
-  /* benchmark table */
-  .tbl{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);
-    border-radius:14px;overflow:hidden;box-shadow:var(--shadow);}
-  .tbl th,.tbl td{padding:.75rem 1rem;text-align:left;border-top:1px solid var(--line);font-size:.95rem;}
-  .tbl thead th{background:var(--alt);border-top:none;font-size:.78rem;letter-spacing:.05em;
-    text-transform:uppercase;color:var(--muted);font-weight:700;}
-  .tbl td.num{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums;}
-  .win{color:var(--green-2);font-weight:700;}
-  .note{color:var(--muted);font-size:.92rem;margin-top:1rem;}
+  .tbl{width:100%;border-collapse:collapse;background:#fff;border:1px solid var(--line);border-radius:16px;overflow:hidden;box-shadow:var(--sh2);}
+  .tbl th,.tbl td{padding:.8rem 1rem;text-align:left;border-top:1px solid var(--line);font-size:.95rem;}
+  .tbl thead th{background:var(--alt);border-top:none;font-size:.76rem;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-weight:700;}
+  .tbl tbody tr{transition:background .15s;} .tbl tbody tr:hover{background:var(--alt);}
+  .tbl td.num{text-align:right;font-family:var(--mono);} .win{color:var(--green-2);font-weight:700;}
 
-  footer{border-top:1px solid var(--line);padding:34px 0 50px;color:var(--muted);font-size:.9rem;}
-  footer .wrap{display:flex;gap:1rem;flex-wrap:wrap;align-items:center;}
-  footer .sp{flex:1;}
-  @media(prefers-reduced-motion:no-preference){
-    .rise{opacity:0;transform:translateY(10px);animation:r .7s cubic-bezier(.2,.7,.2,1) forwards;}
-    @keyframes r{to{opacity:1;transform:none;}}
-  }
+  /* how to view */
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:1.1rem;perspective:1000px;}
+  @media(max-width:640px){.grid2{grid-template-columns:1fr;}}
+  .view{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:1.35rem 1.4rem;box-shadow:var(--sh2);display:flex;flex-direction:column;gap:.5rem;}
+  .view .ic{width:38px;height:38px;border-radius:11px;display:grid;place-items:center;font-size:1.15rem;background:var(--green-dim);transform:translateZ(26px);}
+  .view h3{margin:.3rem 0 0;font-size:1.06rem;transform:translateZ(12px);}
+  .view p{margin:0;color:var(--muted);font-size:.94rem;transform:translateZ(8px);}
+  .view code{font-family:var(--mono);font-size:.82rem;background:var(--alt);padding:.15rem .4rem;border-radius:6px;color:#333d43;}
+  .view .go{margin-top:.35rem;font-weight:600;font-size:.92rem;}
+  .steps{font-family:var(--mono);font-size:.84rem;background:#0f1417;color:#dfe6e2;border-radius:12px;padding:1rem 1.1rem;line-height:1.75;box-shadow:var(--sh2);overflow-x:auto;}
+  .steps .c{color:#6ee7a8;} .steps .d{color:#7c8791;}
+
+  footer{border-top:1px solid var(--line);padding:36px 0 54px;color:var(--muted);font-size:.9rem;}
+  footer .wrap{display:flex;gap:1.1rem;flex-wrap:wrap;align-items:center;} footer .sp{flex:1;}
+  @media(prefers-reduced-motion:reduce){.tilt{transition:none!important;}}
 </style>
 </head>
 <body>
 
 <nav><div class="wrap">
-  <span class="brand"><span class="melon"></span>Engram</span>
-  <span class="sp"></span>
-  <a href="#how">How it works</a>
-  <a href="#demo">Demo</a>
-  <a href="#results">Results</a>
+  <span class="brand"><span class="melon"></span>Engram</span><span class="sp"></span>
+  <a href="#how">How it works</a><a href="#demo">Try it</a><a href="#results">Results</a><a href="#view">View submission</a>
   <a class="btn ghost" href="https://github.com/Demiladepy/engram">GitHub</a>
 </div></nav>
 
-<header class="hero"><div class="wrap rise">
+<header class="hero"><div class="wrap">
   <span class="eyebrow">Hack Hydra 2026 · Memory &amp; Context Retrieval</span>
   <h1>Graph memory that <span class="g">shows its work</span>.</h1>
-  <p class="sub">Engram is agent memory on HydraDB that recalls the version of a fact
-    that's true <em>now</em>, proves where it came from, and abstains when the answer
-    isn't in the history — the things vector search structurally can't do.</p>
+  <p class="sub">Engram is agent memory on HydraDB. It recalls the version of a fact that is
+    true right now, proves where it came from, and says it does not know when the answer is
+    not in the history. Vector search cannot do any of that.</p>
   <div class="cta">
-    <a class="btn" href="https://github.com/Demiladepy/engram">View on GitHub</a>
-    <a class="btn ghost" href="#demo">See a receipt ↓</a>
+    <a class="btn" href="#demo">Try the demo</a>
+    <a class="btn ghost" href="https://github.com/Demiladepy/engram">View on GitHub</a>
   </div>
 </div></header>
-
-<section id="problem"><div class="wrap">
-  <p class="kicker">The problem</p>
-  <h2>Similar isn't current.</h2>
-  <p class="lead">When a user updates a fact across sessions — a new personal best, a
-    move to a new city — vector search returns the old value and the new one by
-    similarity, with no way to tell which is true now. And it never abstains, so it
-    confidently answers questions the history never covered. Memory has to track how a
-    fact <em>changed</em>, and show why it recalled what it did.</p>
-</div></section>
 
 <section id="how"><div class="wrap">
   <p class="kicker">How it works</p>
   <h2>A temporal provenance graph, on HydraDB.</h2>
-  <p class="lead">Every history becomes a graph HydraDB traverses. Answers are graph
-    walks, not similarity lookups.</p>
+  <p class="lead">Every conversation history becomes a graph that HydraDB traverses. Answers
+    are graph walks, not similarity lookups.</p>
   <div class="grid3">
-    <div class="tile"><div class="tnum">1</div><h3>Ingest</h3>
-      <p>Sessions → messages → facts → entities. Each fact that updates an earlier one
-      gets a <span class="mono">SUPERSEDES</span> edge. Written with batched
-      <span class="mono">UNWIND</span> upserts.</p></div>
-    <div class="tile"><div class="tnum">2</div><h3>Traverse</h3>
-      <p>A typed multi-hop <span class="mono">MATCH</span> over
-      <span class="mono">STATES / ABOUT / SUPERSEDES</span> plus HydraDB's native
-      <span class="mono">algo.SSpaths</span>, filtered to the current fact.</p></div>
-    <div class="tile"><div class="tnum">3</div><h3>Answer + receipt</h3>
-      <p>Answer strictly from that evidence, with a receipt — the source message and the
-      value it superseded — or abstain when nothing supports it.</p></div>
+    <div class="tilt tile"><div class="tnum">1</div><h3>Ingest</h3><p>Sessions hold messages, messages state facts, facts are about entities. Any fact that updates an earlier one gets a <span class="mono">SUPERSEDES</span> edge.</p></div>
+    <div class="tilt tile"><div class="tnum">2</div><h3>Traverse</h3><p>A typed multi hop <span class="mono">MATCH</span> over <span class="mono">STATES</span>, <span class="mono">ABOUT</span>, and <span class="mono">SUPERSEDES</span>, then a filter to the fact that is current.</p></div>
+    <div class="tilt tile"><div class="tnum">3</div><h3>Answer with a receipt</h3><p>Answer only from that evidence, and attach the source message plus the value it replaced. If nothing supports it, abstain.</p></div>
   </div>
 </div></section>
 
 <section id="demo"><div class="wrap">
-  <p class="kicker">See it</p>
-  <h2>Ask a question whose answer changed.</h2>
-  <p class="lead">The user set a 5K personal best of 27:12 in one session, then 25:50
-    weeks later. Engram follows the supersession edge to the value that's true now.</p>
-  <div class="demo">
-    <p class="q"><span class="lbl">Question · knowledge-update</span>What was my personal
-      best time in the charity 5K run?</p>
-    <div class="answer">
-      <span class="pill"><span class="dot"></span>Answered</span>
-      <span class="aval">25:50</span>
-    </div>
-    <div class="receipt">
-      <div class="rlabel">Receipt · the graph shows its work</div>
-      <div class="fact"><span class="p">personal_best_time_5k</span> =
-        <span class="v">25:50</span></div>
-      <div class="quote">"I'm training for another charity 5K run coming up… By the way,
-        I'm hoping to beat my personal best time of 25:50 this time around."</div>
-      <div class="super"><span class="old">27:12</span><span class="to">superseded by</span>
-        <span class="new">25:50</span></div>
-    </div>
-  </div>
+  <p class="kicker">Try it · real outputs</p>
+  <h2>One question is in the memory. One is not.</h2>
+  <p class="lead">Click each question below. These are actual Engram outputs on a LongMemEval
+    history: a recall with its receipt, and a refusal to guess.</p>
+  <div class="try" id="try"></div>
+  <div class="tilt demo" id="panel"></div>
 </div></section>
 
 <section id="ledger"><div class="wrap">
   <p class="kicker">Supersession ledger</p>
   <h2>A ledger of what changed.</h2>
-  <p class="lead">Engram keeps the whole history of each fact and which value is live —
-    the thing a vector store flattens away.</p>
+  <p class="lead">Engram keeps the full history of each fact and which value is live. A vector
+    store flattens that away. Real chains from one user's history:</p>
   <div class="ledger">
     <div class="lrow"><span class="k">personal_best_time_5k</span><span class="chain"><span class="old">27:12</span>→<span class="new">25:50</span></span></div>
     <div class="lrow"><span class="k">lives_in</span><span class="chain"><span class="old">Tokyo</span>→<span class="new">Canada</span></span></div>
@@ -215,32 +164,105 @@
 
 <section id="results"><div class="wrap">
   <p class="kicker">Benchmark</p>
-  <h2>Competitive on accuracy, alone on auditability.</h2>
-  <p class="lead">LongMemEval-S, same model for both systems, LLM-judged. Accuracy is close;
-    what only Engram provides is a receipt per fact and evidence-backed abstention.</p>
-  <div style="overflow-x:auto">
-  <table class="tbl">
-    <thead><tr><th>Category</th><th>Engram (graph)</th><th>Vector-RAG</th></tr></thead>
+  <h2>Even on accuracy, ahead on trust.</h2>
+  <p class="lead">LongMemEval-S, the same model for both systems, judged by an LLM. Accuracy is
+    close. What only Engram gives you is a receipt for every fact and a refusal to guess.</p>
+  <div style="overflow-x:auto"><table class="tbl">
+    <thead><tr><th>Category</th><th>Engram (graph)</th><th>Vector RAG</th></tr></thead>
     <tbody>
       <tr><td>knowledge-update</td><td class="num win">71%</td><td class="num">67%</td></tr>
       <tr><td>multi-session</td><td class="num win">30%</td><td class="num">20%</td></tr>
       <tr><td>abstention</td><td class="num">100%</td><td class="num">100%</td></tr>
       <tr><td>temporal-reasoning</td><td class="num">20%</td><td class="num">60%</td></tr>
-    </tbody>
-  </table>
+    </tbody></table></div>
+  <p class="note">On this small sample the two are close. Engram's edge is the receipt and the
+    abstention, which a vector retriever cannot produce. Date arithmetic is its weak spot.</p>
+</div></section>
+
+<section id="view"><div class="wrap">
+  <p class="kicker">For the judges</p>
+  <h2>How to view this submission.</h2>
+  <p class="lead">Three ways in, fastest first.</p>
+  <div class="grid2">
+    <a class="tilt view" href="VIDEO_LINK_HERE">
+      <span class="ic">▶</span><h3>Watch the 3 minute demo</h3>
+      <p>Engram answering and abstaining live, with the receipt on screen. The quickest way to get it.</p>
+      <span class="go">Play the video</span>
+    </a>
+    <a class="tilt view" href="#demo">
+      <span class="ic">🍉</span><h3>This page</h3>
+      <p>You are on it. The demo above runs real outputs. Click both questions to see recall and abstention.</p>
+      <span class="go">Back to the demo</span>
+    </a>
+    <a class="tilt view" href="https://github.com/Demiladepy/engram">
+      <span class="ic">◆</span><h3>The code on GitHub</h3>
+      <p>The full system, the benchmark harness, the vector baseline, and one command setup.</p>
+      <span class="go">Open the repo</span>
+    </a>
+    <div class="tilt view">
+      <span class="ic">⚙</span><h3>Run it yourself</h3>
+      <p>Build HydraDB, start a node, then:</p>
+      <div class="steps"><span class="d"># from the repo</span><br>pip install <span class="c">-r</span> requirements.txt<br>streamlit run ui/app.py</div>
+    </div>
   </div>
-  <p class="note">Honest read: the two are close on this small sample. Engram's edge is the
-    provenance receipt and the refusal to guess — neither of which a vector retriever can
-    produce. Temporal date-arithmetic is its named weak spot.</p>
 </div></section>
 
 <footer><div class="wrap">
-  <span class="brand"><span class="melon"></span>Engram</span>
-  <span class="sp"></span>
+  <span class="brand"><span class="melon"></span>Engram</span><span class="sp"></span>
   <a href="https://github.com/Demiladepy/engram">GitHub</a>
   <a href="https://github.com/Demiladepy/engram/blob/main/docs/RESULTS.md">Results</a>
-  <span style="color:var(--faint)">AGPL-3.0 · on HydraDB</span>
+  <span style="color:var(--faint)">AGPL-3.0 · built on HydraDB</span>
 </div></footer>
 
+<script>
+const EXAMPLES = [
+  { label:"personal best 5K?", abstain:false,
+    q:"What was my personal best time in the charity 5K run?",
+    answer:"25:50", fact:"personal_best_time_5k", val:"25:50", superseded:"27:12",
+    source:"“I'm training for another charity 5K run coming up. By the way, I'm hoping to beat my personal best time of 25:50 this time around.”",
+    note:"Two sessions apart the user said 27:12, then 25:50. Engram walked the SUPERSEDES edge to the value that is true now. A vector search returns both and cannot tell which is current." },
+  { label:"name of my hamster?", abstain:true,
+    q:"What is the name of my hamster?",
+    note:"Engram holds over a hundred facts about this user, including their cat Luna, finds nothing about a hamster, and abstains. A model with the whole history in context invents a name." },
+];
+const qbar = document.getElementById('try'), panel = document.getElementById('panel');
+function esc(s){return String(s).replace(/[&<>]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[c]));}
+function render(i){
+  [...qbar.children].forEach((b,j)=>b.classList.toggle('on',j===i));
+  const e = EXAMPLES[i];
+  let h = '<p class="q"><span class="lbl">Question · '+(e.abstain?'unanswerable':'knowledge-update')+'</span>'+esc(e.q)+'</p>';
+  if(e.abstain){
+    h += '<div class="answer"><span class="pill no"><span class="dot"></span>Abstained</span><span class="aval abst">Not in memory. Declined instead of guessing.</span></div><div class="note">'+esc(e.note)+'</div>';
+  } else {
+    h += '<div class="answer"><span class="pill ok"><span class="dot"></span>Answered</span><span class="aval">'+esc(e.answer)+'</span></div>'
+      + '<div class="receipt"><div class="rlabel">Receipt · the graph shows its work</div>'
+      + '<div class="fact"><span class="p">'+esc(e.fact)+'</span> = <span class="v">'+esc(e.val)+'</span></div>'
+      + '<div class="quote">'+esc(e.source)+'</div>'
+      + '<div class="super"><span class="old">'+esc(e.superseded)+'</span><span class="to">superseded by</span><span class="new">'+esc(e.val)+'</span></div></div>'
+      + '<div class="note">'+esc(e.note)+'</div>';
+  }
+  panel.innerHTML = h;
+}
+EXAMPLES.forEach((e,i)=>{
+  const b = document.createElement('button');
+  b.className = 'qbtn'+(e.abstain?' abs':''); b.textContent = e.label;
+  b.onclick = ()=>render(i); qbar.appendChild(b);
+});
+render(0);
+
+// 3D tilt that follows the cursor
+const RM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+if(!RM){
+  document.querySelectorAll('.tilt').forEach(el=>{
+    el.addEventListener('mousemove',ev=>{
+      const r = el.getBoundingClientRect();
+      const px = (ev.clientX - r.left)/r.width - .5, py = (ev.clientY - r.top)/r.height - .5;
+      el.style.transform = 'perspective(900px) rotateX('+(-py*6).toFixed(2)+'deg) rotateY('+(px*7).toFixed(2)+'deg) translateY(-4px)';
+      el.style.boxShadow = 'var(--sh3)';
+    });
+    el.addEventListener('mouseleave',()=>{ el.style.transform=''; el.style.boxShadow=''; });
+  });
+}
+</script>
 </body>
 </html>
