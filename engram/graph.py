@@ -96,8 +96,9 @@ class Hydra:
 
     # Rows per UNWIND query. Each edge row does two MATCHes + a MERGE, so a big
     # instance's STATES batch can blow HydraDB's ~30s query timeout in one go —
-    # chunk it so every query stays well under the limit.
-    _CHUNK = 120
+    # chunk it so every query stays well under the limit. At ~0.24s/edge-row on
+    # the debug node, 40 rows (~10s) leaves comfortable headroom under 30s.
+    _CHUNK = 40
 
     def _run_chunked(self, cypher: str, rows: list[dict[str, Any]], database: str | None) -> None:
         for i in range(0, len(rows), self._CHUNK):
