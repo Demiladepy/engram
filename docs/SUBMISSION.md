@@ -42,12 +42,18 @@ cross-session traversal and no provenance — the whole thing collapses to a fla
 lookup.
 
 **Results**
-On LongMemEval-S, LLM-judged, same model (gpt-4o-mini) for every system:
-- **knowledge-update: Engram 100% vs vector-RAG 60%** — the supersession category.
-- abstention: 100% vs 100% (both decline correctly).
-- multi-session: tied.
-- temporal-reasoning (date arithmetic): Engram weaker — an honest, named limit.
-Chart and CSV in `results/`; worked examples in `docs/RESULTS.md`.
+On a small LongMemEval-S sample, LLM-judged, same model (gpt-4o-mini) for both
+systems — Engram vs a vector-RAG baseline. Accuracy is close; the differentiators
+are provenance and abstention, which vectors lack.
+- knowledge-update: 5/7 (71%) vs 4/6 (67%)
+- multi-session: 3/10 (30%) vs 2/10 (20%)
+- abstention: 5/5 (100%) vs 5/5 (100%)
+- temporal-reasoning (date arithmetic): 1/5 (20%) vs 3/5 (60%) — Engram's honest
+  weak spot; extracted facts lose the exact event dates raw chunks keep.
+Every Engram answer additionally carries a receipt (source message + superseded
+value) and abstains with an empty evidence set when unsupported — behaviours the
+baseline cannot produce. Chart + CSV in `results/`; worked examples in
+`docs/RESULTS.md`.
 
 **Tech stack**
 HydraDB (OpenCypher graph, Bolt) · Python · neo4j Bolt driver · OpenRouter

@@ -53,8 +53,10 @@ def main() -> None:
                       color=_COLORS.get(system, None))
         for b, c in zip(bars, cats):
             n = ns.get((c, system), 0)
-            ax.text(b.get_x() + b.get_width() / 2, b.get_height() + 0.01,
-                    f"{b.get_height():.0%}", ha="center", va="bottom", fontsize=9)
+            correct = round(b.get_height() * n)
+            ax.text(b.get_x() + b.get_width() / 2, b.get_height() + 0.012,
+                    f"{b.get_height():.0%}\n{correct}/{n}", ha="center", va="bottom",
+                    fontsize=8.5, linespacing=1.25)
 
     ax.set_xticks([i + width * (len(systems) - 1) / 2 for i in x])
     ax.set_xticklabels([c.replace("-", "-\n") for c in cats])

@@ -25,10 +25,13 @@ data: a knowledge-update question (`"personal best 5K time?"`) is answered by
 following a `SUPERSEDES` edge from the superseded value to the current one, with
 a receipt pointing at the exact source message; an unanswerable question
 (`"name of my hamster?"`) is correctly **abstained** despite 100+ facts about the
-user. The Engram-vs-vector-RAG benchmark is built and runnable
-([`bench/`](bench/)); the at-scale accuracy chart awaits an LLM budget past
-free-tier daily token caps. Full detail — worked examples, limitations, and how
-to run the benchmark — in [`docs/RESULTS.md`](docs/RESULTS.md).
+user. On a small LongMemEval-S benchmark against a vector-RAG baseline (same
+model), the two are close on accuracy — Engram nominally ahead on multi-session
+and knowledge-update, tied on abstention, behind on temporal date-arithmetic —
+and what sets Engram apart is what the number doesn't measure: a provenance
+receipt per fact and evidence-backed abstention, neither of which a vector
+retriever provides. Full numbers, worked examples, and limitations in
+[`docs/RESULTS.md`](docs/RESULTS.md).
 
 ## How HydraDB is used
 

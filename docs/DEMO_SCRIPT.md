@@ -7,13 +7,13 @@ the bracketed lines are what's on screen.
 
 ---
 
-## 0:00 – 0:25 · The thesis  *[show the chart]*
+## 0:00 – 0:25 · The thesis  *[Engram UI open, knowledge-update sample]*
 
 > "HydraDB's whole bet is that similar isn't relevant. The hardest place to prove
-> that is memory across sessions — where you have to follow how a fact *changed*
-> over time. Here's Engram, a graph memory layer on HydraDB, versus a vector-RAG
-> baseline on LongMemEval. On knowledge-update — questions where an earlier answer
-> got overwritten — Engram scores 100%, vector 60%. Let me show you why."
+> that is memory across sessions — where a fact you stated once gets *overwritten*
+> later, and you have to answer with the version that's true now, not the one that
+> looks most similar. This is Engram, a graph memory layer on HydraDB. Watch it
+> answer, and — the part that matters — watch it show its work."
 
 ## 0:25 – 1:30 · The build  *[Engram UI, knowledge-update sample selected]*
 
@@ -45,14 +45,16 @@ the bracketed lines are what's on screen.
 > name. A plain LLM with the whole history in context hallucinates one. Engram
 > returns an empty evidence set and says: not in memory."
 
-## 2:20 – 3:00 · The number, on HydraDB  *[back to the chart]*
+## 2:20 – 3:00 · The number, on HydraDB  *[show the chart]*
 
-> "Both systems abstain perfectly and tie on aggregation. Engram wins the category
-> it's built for — supersession — and it's honest where it's weaker, on date
-> arithmetic. Every bit of this runs on HydraDB: the provenance graph, the typed
-> multi-hop traversal, the supersession chain, the native path procedures. Graph
-> beat vector on the one thing vectors structurally can't do — traverse a
-> supersession edge across sessions. That's the thesis, benchmarked, on HydraDB."
+> "Benchmarked against a vector-RAG baseline on the same model, the two are close
+> on raw accuracy — Engram a little ahead on multi-session and knowledge-update,
+> tied on abstention, and honestly behind on date arithmetic. But accuracy isn't
+> the whole story: only Engram hands you a receipt for every fact, and only Engram
+> abstains with evidence instead of guessing. All of it runs on HydraDB — the
+> provenance graph, the typed multi-hop traversal, the supersession chain, the
+> native path procedures. Graph did the one thing vectors structurally can't:
+> traverse a supersession edge across sessions, and prove it."
 
 ---
 

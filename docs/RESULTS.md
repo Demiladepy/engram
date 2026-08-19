@@ -54,14 +54,35 @@ returns an empty evidence set and declines.
 - **Multi-session aggregation** (counting across sessions) and **temporal
   date-arithmetic** are harder for the answer step than single-fact recall.
 
-## Pending
+## Benchmark
 
-The full benchmark (`bench/run_longmemeval.py`) — Engram vs vector-RAG vs
-full-context, per category, LLM-judged, resumable — is built and runs. The
-at-scale accuracy chart is gated on an LLM budget beyond free-tier daily token
-caps (Groq free tier = 200k tokens/day; local CPU inference is too slow on the
-dev box). One command produces it once budget is available:
+Engram vs a vector-RAG baseline on LongMemEval-S, same model (gpt-4o-mini via
+OpenRouter) for retrieval-answering on both, LLM-judged, small sample. Chart in
+`results/engram_vs_baseline.png`, raw scores in `results/summary.csv`.
+
+| category | Engram | Vector-RAG |
+|---|---|---|
+| knowledge-update | 5/7 (71%) | 4/6 (67%) |
+| multi-session | 3/10 (30%) | 2/10 (20%) |
+| abstention | 5/5 (100%) | 5/5 (100%) |
+| temporal-reasoning | 1/5 (20%) | 3/5 (60%) |
+
+**Read this honestly.** On a small sample the two systems are close overall.
+Engram is nominally ahead on multi-session and knowledge-update, tied on
+abstention, and clearly behind on temporal reasoning — date arithmetic over
+events, where the raw chunks a vector retriever returns preserve exact dates
+better than extracted facts do. A clean N=5-per-category slice was even kinder to
+Engram on knowledge-update (5/5), but that was small-sample luck; the larger
+sample above is the number to trust.
+
+What the benchmark does **not** capture, and what actually distinguishes Engram,
+are the two behaviours in the verified examples above: a **provenance receipt**
+for every fact, and **evidence-backed abstention** — neither of which a vector
+retriever provides. The accuracy is competitive; the auditability and the refusal
+to guess are the point.
+
+Reproduce / extend:
 
 ```bash
-python -m bench.run_longmemeval --n 8 && python -m bench.plot
+python -m bench.run_longmemeval --n 10 && python -m bench.plot
 ```
