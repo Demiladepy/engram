@@ -51,9 +51,10 @@ AGPL-3.0.
 
 **Deployed Project URL**
 
-Runs locally against a HydraDB node — not publicly deployed, since HydraDB isn't
-a hosted service. Full build-and-run instructions and a 3-min demo video stand in
-for a live URL. Repo: https://github.com/Demiladepy/engram
+https://demiladepy.github.io/engram/  — a live showcase + demo of the system
+(the full interactive app runs locally against a HydraDB node; the repo has
+one-command setup, and the 3-min video shows it running).
+Repo: https://github.com/Demiladepy/engram
 
 **Team contribution**
 
