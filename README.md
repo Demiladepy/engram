@@ -104,8 +104,11 @@ streamlit run ui/app.py                  # receipt viewer
 | `engram/answer.py` | retrieve → temporal filter → answer from evidence → receipt / abstain |
 | `engram/llm.py`    | provider-agnostic (OpenAI-compatible) extraction / answering / judge, cached |
 | `bench/`           | LongMemEval-S harness, vector-RAG + full-context baselines, chart |
-| `ui/app.py`        | Streamlit receipt viewer |
+| `ui/app.py`        | Streamlit receipt viewer (dark, receipt + supersession) |
 | `results/`         | committed CSV + chart |
+| `docs/RESULTS.md`  | verified worked examples + honest limitations |
+| `docs/RUNBOOK.md`  | from-scratch HydraDB build + run |
+| `docs/DEMO_SCRIPT.md` · `docs/SUBMISSION.md` | 3-min video script · paste-ready form answers |
 
 ## License
 
