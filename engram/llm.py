@@ -19,8 +19,18 @@ import hashlib
 import json
 import os
 import time
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
+
+
+def _date(epoch: Any) -> str:
+    """Epoch seconds -> YYYY-MM-DD, so the answer model can do date arithmetic
+    (temporal questions) instead of staring at an integer."""
+    try:
+        return datetime.fromtimestamp(int(epoch), timezone.utc).strftime("%Y-%m-%d")
+    except Exception:
+        return str(epoch)
 
 from openai import (
     APIConnectionError,
@@ -270,6 +280,8 @@ _ANSWER_SYS = (
     "A fact marked status=current also wins over status=superseded.\n"
     "- Only abstain (abstained=true, answer='') when NO fact is relevant to the "
     "question. Do not abstain merely because wording differs or values conflict.\n"
+    "- For questions about durations, gaps, or 'how long / how many days', compute "
+    "from the 'when' dates (YYYY-MM-DD) and the dates in the source text.\n"
     "- Never use outside knowledge. List the fact ids you relied on in "
     "used_fact_ids. Call answer."
 )
@@ -280,7 +292,7 @@ def answer(question: str, evidence: list[dict[str, Any]]) -> dict[str, Any]:
         return {"abstained": True, "answer": "", "used_fact_ids": []}
     facts_text = "\n".join(
         f"id={f['id']} | {f['subject']} {f['predicate']} = {f['object']} "
-        f"| status={f['status']} | when={f['valid_from']} | source={f.get('source_text', '')!r}"
+        f"| status={f['status']} | when={_date(f['valid_from'])} | source={f.get('source_text', '')!r}"
         for f in evidence
     )
     user = f"Question: {question}\n\nEvidence facts:\n{facts_text}"

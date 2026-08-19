@@ -8,12 +8,19 @@ set -euo pipefail
 
 HYDRADB="${HYDRADB:-$HOME/hydra/hydradb}"
 NODE="${ENGRAM_NODE_ROOT:-$HOME/hydra/engram-node}"
-BIN="$HYDRADB/target/debug/graph-node"
+# Prefer the optimized release binary (stable under load, no write timeouts);
+# fall back to debug.
+if [[ -x "$HYDRADB/target/release/graph-node" ]]; then
+  BIN="$HYDRADB/target/release/graph-node"
+else
+  BIN="$HYDRADB/target/debug/graph-node"
+fi
 
 if [[ ! -x "$BIN" ]]; then
   echo "graph-node not built at $BIN — run the HydraDB build first" >&2
   exit 1
 fi
+echo "using node binary: $BIN" >&2
 
 mkdir -p "$NODE/store" "$NODE/cache"
 TOKEN_FILE="$NODE/auth-token"
