@@ -281,7 +281,7 @@ _ANSWER_SYS = (
     "- Only abstain (abstained=true, answer='') when NO fact is relevant to the "
     "question. Do not abstain merely because wording differs or values conflict.\n"
     "- For questions about durations, gaps, or 'how long / how many days', compute "
-    "from the 'when' dates (YYYY-MM-DD) and the dates in the source text.\n"
+    "from the 'when' dates (YYYY-MM-DD).\n"
     "- Never use outside knowledge. List the fact ids you relied on in "
     "used_fact_ids. Call answer."
 )
@@ -290,9 +290,12 @@ _ANSWER_SYS = (
 def answer(question: str, evidence: list[dict[str, Any]]) -> dict[str, Any]:
     if not evidence:
         return {"abstained": True, "answer": "", "used_fact_ids": []}
+    # Only the fact rows — NOT their source text. Including every fact's full
+    # source quote blew the prompt up (200+ facts) and made the call fail, which
+    # silently abstained. The receipt fetches source separately per used fact.
     facts_text = "\n".join(
         f"id={f['id']} | {f['subject']} {f['predicate']} = {f['object']} "
-        f"| status={f['status']} | when={_date(f['valid_from'])} | source={f.get('source_text', '')!r}"
+        f"| status={f['status']} | when={_date(f['valid_from'])}"
         for f in evidence
     )
     user = f"Question: {question}\n\nEvidence facts:\n{facts_text}"
