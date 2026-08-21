@@ -182,16 +182,52 @@ def ingest_instance(hydra: Hydra, inst: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _canon_predicates(preds: set[str]) -> dict[str, str]:
+    """Map near-duplicate predicate names to one canonical form, so the same
+    real-world attribute extracted under drifting names (e.g.
+    'charity_5k_personal_best_time' and 'personal_best_5k_time') still groups for
+    supersession. Token-set Jaccard >= 0.6; the shorter name is the canonical."""
+    def toks(p: str) -> set[str]:
+        return {t for t in p.split("_") if t}
+
+    canon: dict[str, str] = {}
+    reps: list[tuple[str, set[str]]] = []
+    for p in sorted(preds, key=len):  # shorter names become representatives
+        tp = toks(p)
+        match = None
+        for rep, tr in reps:
+            union = len(tp | tr)
+            if union and len(tp & tr) / union >= 0.6:
+                match = rep
+                break
+        if match:
+            canon[p] = match
+        else:
+            reps.append((p, tp))
+            canon[p] = p
+    return canon
+
+
 def _link_supersessions(b: _Batch) -> None:
-    groups: dict[tuple[str, str], list[dict]] = {}
+    import collections
+
+    by_entity: dict[str, list[dict]] = collections.defaultdict(list)
     for f in b.facts.values():
-        groups.setdefault((f["_entity"], f["predicate"]), []).append(f)
-    for chain in groups.values():
-        chain.sort(key=lambda f: f["valid_from"])
-        for older, newer in zip(chain, chain[1:]):
-            older["status"] = "superseded"
-            older["valid_to"] = newer["valid_from"]
-            b.supersedes.append(b.edge("SUPERSEDES", newer["id"], older["id"]))
+        by_entity[f["_entity"]].append(f)
+
+    for facts in by_entity.values():
+        canon = _canon_predicates({f["predicate"] for f in facts})
+        groups: dict[str, list[dict]] = collections.defaultdict(list)
+        for f in facts:
+            groups[canon[f["predicate"]]].append(f)
+        for chain in groups.values():
+            chain.sort(key=lambda f: f["valid_from"])
+            for older, newer in zip(chain, chain[1:]):
+                if older["object"] == newer["object"]:
+                    continue  # same value restated, not an update
+                older["status"] = "superseded"
+                older["valid_to"] = newer["valid_from"]
+                b.supersedes.append(b.edge("SUPERSEDES", newer["id"], older["id"]))
 
 
 def _flush(hydra: Hydra, db: str, b: _Batch) -> None:
