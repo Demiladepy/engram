@@ -11,7 +11,7 @@
 [![Built on HydraDB](https://img.shields.io/badge/built%20on-HydraDB-ef4d6a)](https://github.com/hydra-db/hydradb)
 [![Python](https://img.shields.io/badge/python-3.12-3776ab)](#quickstart)
 
-**[Live demo](https://demiladepy.github.io/engram/) · [3-minute video](VIDEO_URL) · [Results and limitations](docs/RESULTS.md)**
+**[Live demo](https://demiladepy.github.io/engram/) · [3-minute video](https://youtu.be/WdnvNiXB0-Q) · [Results and limitations](docs/RESULTS.md)**
 
 </div>
 
