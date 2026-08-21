@@ -65,7 +65,7 @@ LLM layer, the LongMemEval benchmark harness and vector baseline, and the UI.
 
 **Demo video**
 
-<paste unlisted YouTube link>
+https://youtu.be/WdnvNiXB0-Q
 
 ---
 
